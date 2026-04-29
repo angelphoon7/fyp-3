@@ -41,12 +41,20 @@ const mockPosts: PostProps[] = [
     id: "3",
     user: {
       name: "Natasha",
-      avatar: "/malay_caregiver.webp"
+      avatar: "/malay_caregiver.webp",
+      trustRating: "⭐ 4.9 (120 Shifts)"
     },
     time: "1 day ago",
-    imageUrl: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=800&q=80",
-    caption: "Remember to take care of yourself too. Took an hour today just to walk in the park while my sister watched over mom. Caregiver burnout is real, please prioritize your own health when you can. 🌿",
-    likes: 210,
+    type: "help",
+    helpDetails: {
+      date: "Sat, Nov 14",
+      time: "08:00 AM - 02:00 PM",
+      location: "Bayan Lepas, Penang",
+      patientAge: "72",
+      condition: "Dementia (Stage 2) • Mobility Assist"
+    },
+    caption: "Need someone to cover my morning shift this weekend. My son is graduating so I can't be there. Very calm patient, just needs help with breakfast and light walking.",
+    likes: 12,
     comments: []
   }
 ];
@@ -91,6 +99,8 @@ export default function CommunityPage() {
   const [activeChatGroupId, setActiveChatGroupId] = useState<string | null>(null);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
+  const [isRequestingHelp, setIsRequestingHelp] = useState(false);
+  const [feedFilter, setFeedFilter] = useState<"all" | "help">("all");
 
   const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
   const [postPhotos, setPostPhotos] = useState<string[]>([]);
@@ -195,6 +205,9 @@ export default function CommunityPage() {
               Community
             </h1>
             <div className="flex gap-4">
+              <button onClick={() => setIsRequestingHelp(true)} className="text-amber-400 hover:text-amber-300 transition-transform active:scale-90 flex items-center justify-center bg-amber-500/10 h-8 w-8 rounded-full border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+              </button>
               <button onClick={() => setIsCreatingPost(true)} className="text-white/80 hover:text-white transition-transform active:scale-90">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14" />
@@ -232,11 +245,32 @@ export default function CommunityPage() {
             </div>
           </div>
 
+          {/* Feed Filter Segmented Control */}
+          <div className="px-4 pt-4 pb-2">
+            <div className="flex p-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]">
+              <button 
+                onClick={() => setFeedFilter("all")}
+                className={`flex-1 py-2 text-[13px] font-bold rounded-full transition-all duration-300 ${feedFilter === "all" ? "bg-white/15 text-white shadow-sm border border-white/10" : "text-white/50 hover:text-white/80"}`}
+              >
+                All Posts
+              </button>
+              <button 
+                onClick={() => setFeedFilter("help")}
+                className={`flex-1 py-2 text-[13px] font-bold rounded-full transition-all duration-300 flex items-center justify-center gap-1.5 ${feedFilter === "help" ? "bg-amber-500/20 text-amber-400 shadow-[inset_0_1px_2px_rgba(255,255,255,0.1)] border border-amber-500/30" : "text-white/50 hover:text-amber-400/70"}`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+                Shift Covers
+              </button>
+            </div>
+          </div>
+
           {/* Feed */}
-          <div className="px-4 py-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {mockPosts.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))}
+          <div className="px-4 py-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {mockPosts
+              .filter(post => feedFilter === "all" ? true : post.type === "help")
+              .map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
           </div>
         </div>
 
@@ -471,6 +505,84 @@ export default function CommunityPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Request Help Overlay */}
+        {isRequestingHelp && (
+          <div className="absolute inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-3xl animate-in slide-in-from-bottom duration-300">
+            {/* Header */}
+            <header className="flex items-center justify-between px-6 py-4 bg-amber-500/10 border-b border-amber-500/20 pt-14 shadow-[0_4px_30px_rgba(245,158,11,0.1)]">
+              <button onClick={() => setIsRequestingHelp(false)} className="text-amber-100 hover:text-white transition-colors text-sm font-medium">
+                Cancel
+              </button>
+              <h2 className="text-amber-400 font-bold text-base tracking-wide flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Request Cover
+              </h2>
+              <div className="w-12 text-right" />
+            </header>
+
+            {/* Form */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-32 scrollbar-hide">
+              {/* User Reputation Preview */}
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full p-[2px] border border-amber-500/30">
+                  <img src="/avatar.jpg" alt="Angel" className="h-full w-full rounded-full object-cover" />
+                </div>
+                <div>
+                  <p className="text-xs text-amber-200/70 uppercase tracking-widest font-bold mb-0.5">Your Trust Rating</p>
+                  <p className="text-[15px] font-bold text-amber-400 flex items-center gap-1.5">
+                    ⭐ 5.0 <span className="text-xs text-amber-400/60 font-medium">(Senior Caregiver)</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Form Inputs */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Date</label>
+                    <input type="date" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white focus:outline-none focus:border-amber-400/50 transition-all appearance-none" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Time</label>
+                    <input type="time" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white focus:outline-none focus:border-amber-400/50 transition-all appearance-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Location</label>
+                  <input type="text" placeholder="e.g., Bayan Lepas, Penang" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2 col-span-1">
+                    <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Age</label>
+                    <input type="number" placeholder="72" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Main Condition</label>
+                    <input type="text" placeholder="e.g., Dementia Stage 2" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Specific Needs / Details</label>
+                  <textarea placeholder="Any specific instructions for the shift..." rows={4} className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all resize-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="absolute bottom-0 inset-x-0 p-6 bg-black/60 border-t border-white/10 backdrop-blur-xl z-10">
+              <button 
+                onClick={() => setIsRequestingHelp(false)}
+                className="w-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold text-[15px] py-4 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all active:scale-[0.98]"
+              >
+                Post Request
+              </button>
             </div>
           </div>
         )}

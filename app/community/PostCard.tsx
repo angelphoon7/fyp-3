@@ -13,9 +13,18 @@ export interface PostProps {
   user: {
     name: string;
     avatar: string;
+    trustRating?: string;
   };
   time: string;
-  imageUrl: string;
+  type?: 'post' | 'help';
+  helpDetails?: {
+    date: string;
+    time: string;
+    location: string;
+    patientAge: string;
+    condition: string;
+  };
+  imageUrl?: string;
   caption: string;
   likes: number;
   comments: Comment[];
@@ -41,7 +50,14 @@ export default function PostCard({ post }: { post: PostProps }) {
             <img src={post.user.avatar} alt={post.user.name} className="h-full w-full object-cover" />
           </div>
           <div>
-            <h3 className="text-[15px] font-bold text-white drop-shadow-md">{post.user.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] font-bold text-white drop-shadow-md">{post.user.name}</h3>
+              {post.user.trustRating && (
+                <span className="bg-yellow-400/20 text-yellow-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-yellow-400/30">
+                  {post.user.trustRating}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-white/50">{post.time}</p>
           </div>
         </div>
@@ -54,16 +70,61 @@ export default function PostCard({ post }: { post: PostProps }) {
         </button>
       </div>
 
-      {/* Image Container */}
-      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-white/20 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] bg-black/20">
-        <img 
-          src={post.imageUrl} 
-          alt="Post content" 
-          className="h-full w-full object-cover"
-          onDoubleClick={handleLike}
-        />
-        {/* Heart Animation overlay on double click could go here */}
-      </div>
+      {/* Dynamic Content Container */}
+      {post.type === 'help' && post.helpDetails ? (
+        <div className="relative w-full rounded-2xl overflow-hidden border border-amber-500/30 bg-amber-500/5 p-5 mt-2 shadow-[inset_0_0_20px_rgba(245,158,11,0.1)]">
+          <div className="absolute top-0 right-0 p-1.5 bg-amber-500 rounded-bl-xl shadow-md">
+            <span className="text-[9px] font-black text-black uppercase tracking-widest px-2">Shift Cover Needed</span>
+          </div>
+          
+          <p className="text-sm text-white/90 mb-5 font-medium leading-relaxed pt-2">{post.caption}</p>
+          
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-full bg-black/40 flex items-center justify-center text-amber-400 border border-amber-500/20">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div>
+                <p className="text-[10px] text-amber-400/70 uppercase tracking-widest font-bold mb-0.5">When</p>
+                <p className="text-[13px] font-bold text-white">{post.helpDetails.date} • {post.helpDetails.time}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-full bg-black/40 flex items-center justify-center text-amber-400 border border-amber-500/20">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div>
+                <p className="text-[10px] text-amber-400/70 uppercase tracking-widest font-bold mb-0.5">Location</p>
+                <p className="text-[13px] font-bold text-white">{post.helpDetails.location}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-full bg-black/40 flex items-center justify-center text-amber-400 border border-amber-500/20">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div>
+                <p className="text-[10px] text-amber-400/70 uppercase tracking-widest font-bold mb-0.5">Patient Profile</p>
+                <p className="text-[13px] font-bold text-white">{post.helpDetails.patientAge}y • {post.helpDetails.condition}</p>
+              </div>
+            </div>
+          </div>
+          
+          <button className="w-full mt-6 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+            Offer Help
+          </button>
+        </div>
+      ) : post.imageUrl ? (
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-white/20 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] bg-black/20 mt-2">
+          <img 
+            src={post.imageUrl} 
+            alt="Post content" 
+            className="h-full w-full object-cover"
+            onDoubleClick={handleLike}
+          />
+        </div>
+      ) : null}
 
       {/* Action Bar */}
       <div className="flex items-center justify-between mt-4 px-2">
@@ -110,10 +171,12 @@ export default function PostCard({ post }: { post: PostProps }) {
       </div>
 
       {/* Caption */}
-      <div className="px-2 mt-1 text-[14px] text-white/90">
-        <span className="font-bold text-white mr-2">{post.user.name}</span>
-        {post.caption}
-      </div>
+      {post.type !== 'help' && (
+        <div className="px-2 mt-1 text-[14px] text-white/90">
+          <span className="font-bold text-white mr-2">{post.user.name}</span>
+          {post.caption}
+        </div>
+      )}
 
       {/* Comments Section */}
       <div className="px-2 mt-2">
