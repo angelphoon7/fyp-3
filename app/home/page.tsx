@@ -58,9 +58,9 @@ export default function HomeDashboard() {
       path: "/financial",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="6" width="20" height="12" rx="2" />
-          <circle cx="12" cy="12" r="2" />
-          <path d="M6 12h.01M18 12h.01" />
+          <circle cx="12" cy="12" r="10" />
+          <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+          <path d="M12 18V6" />
         </svg>
       )
     }
@@ -178,37 +178,95 @@ export default function HomeDashboard() {
             </div>
           </div>
 
-          {/* Overview Stats */}
+          {/* Quick Access Categories */}
           <div className="px-6 py-5 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white/90">Overview</h2>
-              <button className="text-xs font-medium text-yellow-400 hover:text-yellow-300">View All</button>
-            </div>
+            <h2 className="text-lg font-semibold text-white/90 mb-4">Quick Access</h2>
             
             <div className="grid grid-cols-2 gap-4">
-              {/* Card 1 */}
-              <SpotlightCard spotlightColor="rgba(59, 130, 246, 0.2)" className="rounded-3xl border border-white/30 bg-gradient-to-br from-white/15 to-white/5 p-5 backdrop-blur-[40px] backdrop-saturate-200 shadow-[0_12px_40px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(255,255,255,0.4)] transition-transform hover:scale-[1.02] active:scale-[0.98]">
-                <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-blue-500/20 blur-2xl pointer-events-none" />
-                <div className="h-10 w-10 rounded-2xl bg-blue-500/20 flex items-center justify-center mb-4 text-blue-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                  </svg>
+              {/* Box 1: Patient Caring */}
+              <SpotlightCard spotlightColor="rgba(244, 114, 182, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
+                <div className="h-32 w-full relative bg-white/5">
+                  <img src="/homecare_icon.jpg" alt="Patient Caring" className="h-full w-full object-cover" />
+                  <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md">
+                    Top Rated
+                  </div>
                 </div>
-                <p className="text-white/50 text-xs font-medium mb-1 uppercase tracking-wider">Health Score</p>
-                <p className="text-2xl font-bold text-white drop-shadow-md">94<span className="text-lg text-white/50">%</span></p>
+                <div className="p-3.5 flex flex-col justify-between flex-1">
+                  <div>
+                    <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Patient Caring</h3>
+                    <div className="flex items-center text-[11px] text-white/60">
+                      <span className="text-yellow-400 mr-1">★ 4.9</span>
+                      <span>(128) • Certified</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
+                    <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider">Available</span>
+                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">Book</span>
+                  </div>
+                </div>
               </SpotlightCard>
 
-              {/* Card 2 */}
-              <SpotlightCard spotlightColor="rgba(16, 185, 129, 0.2)" className="rounded-3xl border border-white/30 bg-gradient-to-br from-white/15 to-white/5 p-5 backdrop-blur-[40px] backdrop-saturate-200 shadow-[0_12px_40px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(255,255,255,0.4)] transition-transform hover:scale-[1.02] active:scale-[0.98]">
-                <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-emerald-500/20 blur-2xl pointer-events-none" />
-                <div className="h-10 w-10 rounded-2xl bg-emerald-500/20 flex items-center justify-center mb-4 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 20V10" />
-                    <path d="m18 20-6-10-6 10" />
-                  </svg>
+              {/* Box 2: Household Management */}
+              <SpotlightCard spotlightColor="rgba(56, 189, 248, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
+                <div className="h-32 w-full relative bg-white/5">
+                  <img src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80" alt="Household Management" className="h-full w-full object-cover" />
                 </div>
-                <p className="text-white/50 text-xs font-medium mb-1 uppercase tracking-wider">Milestones</p>
-                <p className="text-2xl font-bold text-white drop-shadow-md">12<span className="text-sm font-normal text-emerald-400 ml-1">↑2</span></p>
+                <div className="p-3.5 flex flex-col justify-between flex-1">
+                  <div>
+                    <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide leading-tight">Household<br/>Management</h3>
+                    <div className="flex items-center text-[11px] text-white/60 mt-1">
+                      <span className="text-yellow-400 mr-1">★ 4.7</span>
+                      <span>(84) • Cleaning</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
+                    <span className="text-[10px] uppercase font-bold text-sky-400 tracking-wider">Same Day</span>
+                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">Book</span>
+                  </div>
+                </div>
+              </SpotlightCard>
+
+              {/* Box 3: Medication */}
+              <SpotlightCard spotlightColor="rgba(16, 185, 129, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
+                <div className="h-32 w-full relative bg-white/5">
+                  <img src="/medicine.jpg" alt="Medication" className="h-full w-full object-cover" />
+                  <div className="absolute top-2 right-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md">
+                    Reminder
+                  </div>
+                </div>
+                <div className="p-3.5 flex flex-col justify-between flex-1">
+                  <div>
+                    <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Medication</h3>
+                    <div className="flex items-center text-[11px] text-white/60">
+                      <span className="text-emerald-400 mr-1">●</span>
+                      <span>Active Plan</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
+                    <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Track</span>
+                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">View</span>
+                  </div>
+                </div>
+              </SpotlightCard>
+
+              {/* Box 4: Appointments */}
+              <SpotlightCard spotlightColor="rgba(168, 85, 247, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
+                <div className="h-32 w-full relative bg-white/5">
+                  <img src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80" alt="Appointments" className="h-full w-full object-cover" />
+                </div>
+                <div className="p-3.5 flex flex-col justify-between flex-1">
+                  <div>
+                    <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Appointments</h3>
+                    <div className="flex items-center text-[11px] text-white/60">
+                      <span className="text-purple-400 mr-1">📅</span>
+                      <span>Next: Tomorrow</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
+                    <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Hospital</span>
+                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">Manage</span>
+                  </div>
+                </div>
               </SpotlightCard>
             </div>
           </div>
