@@ -30,7 +30,7 @@ const mockPosts: PostProps[] = [
       avatar: "/india.webp"
     },
     time: "5 hours ago",
-    imageUrl: "/medicine.jpg",
+    imageUrl: "/give_medicine.png",
     caption: "Organizing medications is half the battle. Just spent the morning setting up the new pill organizers for the month. Does anyone have recommendations for good tracking apps? 💊",
     likes: 89,
     comments: [

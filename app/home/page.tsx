@@ -148,35 +148,7 @@ export default function HomeDashboard() {
             </div>
           </header>
 
-          {/* Search Bar */}
-          <div className="px-6 py-3 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-            <div className="relative group">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 transition-colors group-focus-within:text-yellow-400">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-              </div>
-              <input 
-                type="text" 
-                placeholder="Search resources, events..." 
-                className="w-full rounded-2xl border border-white/30 bg-white/10 py-3.5 pl-12 pr-4 text-[15px] text-white placeholder-white/40 outline-none backdrop-blur-[40px] backdrop-saturate-150 transition-all focus:border-white/50 focus:bg-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_2px_rgba(255,255,255,0.3)]"
-              />
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl bg-white/10 p-1.5 text-white/60 hover:bg-white/20 transition-colors">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 21v-7" />
-                  <path d="M4 10V3" />
-                  <path d="M12 21v-9" />
-                  <path d="M12 8V3" />
-                  <path d="M20 21v-5" />
-                  <path d="M20 12V3" />
-                  <path d="M1 14h6" />
-                  <path d="M9 8h6" />
-                  <path d="M17 16h6" />
-                </svg>
-              </button>
-            </div>
-          </div>
+
 
           {/* Quick Access Categories */}
           <div className="px-6 py-5 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
@@ -186,7 +158,7 @@ export default function HomeDashboard() {
               {/* Box 1: Patient Caring */}
               <SpotlightCard spotlightColor="rgba(244, 114, 182, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
                 <div className="h-32 w-full relative bg-white/5">
-                  <img src="/homecare_icon.jpg" alt="Patient Caring" className="h-full w-full object-cover" />
+                  <img src="/homecare_icon.jpg" alt="Patient Caring" className="h-full w-full object-cover object-center" />
                   <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md">
                     Top Rated
                   </div>
@@ -194,14 +166,6 @@ export default function HomeDashboard() {
                 <div className="p-3.5 flex flex-col justify-between flex-1">
                   <div>
                     <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Patient Caring</h3>
-                    <div className="flex items-center text-[11px] text-white/60">
-                      <span className="text-yellow-400 mr-1">★ 4.9</span>
-                      <span>(128) • Certified</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
-                    <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider">Available</span>
-                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">Book</span>
                   </div>
                 </div>
               </SpotlightCard>
@@ -209,19 +173,11 @@ export default function HomeDashboard() {
               {/* Box 2: Household Management */}
               <SpotlightCard spotlightColor="rgba(56, 189, 248, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
                 <div className="h-32 w-full relative bg-white/5">
-                  <img src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80" alt="Household Management" className="h-full w-full object-cover" />
+                  <img src="/household.jpg" alt="Household Management" className="h-full w-full object-cover object-center" />
                 </div>
                 <div className="p-3.5 flex flex-col justify-between flex-1">
                   <div>
                     <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide leading-tight">Household<br/>Management</h3>
-                    <div className="flex items-center text-[11px] text-white/60 mt-1">
-                      <span className="text-yellow-400 mr-1">★ 4.7</span>
-                      <span>(84) • Cleaning</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
-                    <span className="text-[10px] uppercase font-bold text-sky-400 tracking-wider">Same Day</span>
-                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">Book</span>
                   </div>
                 </div>
               </SpotlightCard>
@@ -237,14 +193,6 @@ export default function HomeDashboard() {
                 <div className="p-3.5 flex flex-col justify-between flex-1">
                   <div>
                     <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Medication</h3>
-                    <div className="flex items-center text-[11px] text-white/60">
-                      <span className="text-emerald-400 mr-1">●</span>
-                      <span>Active Plan</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
-                    <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Track</span>
-                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">View</span>
                   </div>
                 </div>
               </SpotlightCard>
@@ -257,74 +205,13 @@ export default function HomeDashboard() {
                 <div className="p-3.5 flex flex-col justify-between flex-1">
                   <div>
                     <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Appointments</h3>
-                    <div className="flex items-center text-[11px] text-white/60">
-                      <span className="text-purple-400 mr-1">📅</span>
-                      <span>Next: Tomorrow</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
-                    <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Hospital</span>
-                    <span className="text-[11px] font-bold text-white bg-white/10 px-2.5 py-1 rounded-full">Manage</span>
                   </div>
                 </div>
               </SpotlightCard>
             </div>
           </div>
 
-          {/* Featured Section */}
-          <div className="px-6 py-2 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300">
-            <h2 className="text-lg font-semibold mb-4 text-white/90">Daily Updates</h2>
-            <div className="space-y-3">
-              {[
-                { title: "Morning Review", time: "2 hours ago", icon: "sun", color: "text-yellow-400", bg: "bg-yellow-400/10", border: "border-yellow-400/20" },
-                { title: "New Community Post", time: "4 hours ago", icon: "message", color: "text-blue-400", bg: "bg-blue-400/10", border: "border-blue-400/20" },
-                { title: "Weekly Report Ready", time: "1 day ago", icon: "file", color: "text-emerald-400", bg: "bg-emerald-400/10", border: "border-emerald-400/20" }
-              ].map((item, i) => (
-                <SpotlightCard key={i} spotlightColor="rgba(255, 255, 255, 0.15)" className="group flex items-center gap-4 rounded-2xl border border-white/30 bg-white/10 p-4 backdrop-blur-[40px] backdrop-saturate-150 transition-all hover:bg-white/20 hover:border-white/40 active:scale-[0.98] shadow-[0_8px_32px_rgba(0,0,0,0.2),inset_0_1px_2px_rgba(255,255,255,0.3)]">
-                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center border shadow-sm ${item.bg} ${item.color} ${item.border} group-hover:scale-110 transition-transform duration-300`}>
-                    {item.icon === "sun" && (
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="4" />
-                        <path d="M12 2v2" /><path d="M12 20v2" />
-                        <path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" />
-                        <path d="M2 12h2" /><path d="M20 12h2" />
-                        <path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
-                      </svg>
-                    )}
-                    {item.icon === "message" && (
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                      </svg>
-                    )}
-                    {item.icon === "file" && (
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <path d="M14 2v6h6" />
-                        <path d="M16 13H8" />
-                        <path d="M16 17H8" />
-                        <path d="M10 9H8" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-[15px] font-semibold text-white/90 group-hover:text-white transition-colors">{item.title}</h3>
-                    <p className="text-xs text-white/50 mt-1 flex items-center gap-1.5">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                      </svg>
-                      {item.time}
-                    </p>
-                  </div>
-                  <div className="text-white/30 group-hover:text-white/80 transition-colors">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </div>
-                </SpotlightCard>
-              ))}
-            </div>
-          </div>
+
         </div>
 
         {/* Floating Bottom Navigation Bar */}
