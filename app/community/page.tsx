@@ -11,11 +11,11 @@ const mockPosts: PostProps[] = [
   {
     id: "1",
     user: {
-      name: "Sarah Jenkins",
+      name: "Mei Ling",
       avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80"
     },
     time: "2 hours ago",
-    imageUrl: "https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?auto=format&fit=crop&w=800&q=80",
+    imageUrl: "/caregiver1.jpg",
     caption: "Had a breakthrough with my dad today. We finally found a daily routine that keeps him calm and comfortable. Small wins mean everything on this journey! ❤️",
     likes: 124,
     comments: [
@@ -52,11 +52,9 @@ const mockPosts: PostProps[] = [
 ];
 
 const communityGroups = [
-  { id: '1', name: 'Morning Shift', icon: '🌅', color: 'from-orange-400 to-yellow-400' },
-  { id: '2', name: 'Night Shift', icon: '🌙', color: 'from-indigo-400 to-purple-500' },
-  { id: '3', name: 'Penang Area', icon: '🏙️', color: 'from-blue-400 to-cyan-400' },
-  { id: '4', name: 'Dementia Care', icon: '🧠', color: 'from-pink-400 to-rose-400' },
-  { id: '5', name: 'Newbies', icon: '🌱', color: 'from-emerald-400 to-teal-400' },
+  { id: '1', name: 'Morning Shift', image: '/morning.jpeg', color: 'from-orange-400 to-yellow-400' },
+  { id: '3', name: 'Penang Area', image: '/penang.jpeg', color: 'from-blue-400 to-cyan-400' },
+  { id: '4', name: 'Dementia Care', image: '/dementia.jpg', color: 'from-pink-400 to-rose-400' },
 ];
 
 export default function CommunityPage() {
@@ -166,7 +164,11 @@ export default function CommunityPage() {
                   <div className={`p-[2px] rounded-full bg-gradient-to-tr ${group.color} transition-transform group-active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
                     <div className="h-16 w-16 rounded-full bg-[#121212] flex items-center justify-center border-2 border-black relative overflow-hidden shadow-[inset_0_1px_5px_rgba(255,255,255,0.1)]">
                       <div className="absolute inset-0 bg-white/5" />
-                      <span className="text-3xl drop-shadow-md z-10">{group.icon}</span>
+                      {(group as any).image ? (
+                        <img src={(group as any).image} alt={group.name} className={`h-full w-full object-cover z-10 ${(group as any).imagePosition || 'object-center'}`} />
+                      ) : (
+                        <span className="text-3xl drop-shadow-md z-10">{group.icon}</span>
+                      )}
                     </div>
                   </div>
                   <span className="text-[11px] font-medium text-white/80 tracking-wide">{group.name}</span>
