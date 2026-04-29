@@ -152,7 +152,7 @@ export default function HomeDashboard() {
 
           {/* Quick Access Categories */}
           <div className="px-6 py-5 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
-            <h2 className="text-lg font-semibold text-white/90 mb-4">Quick Access</h2>
+            <h2 className="text-lg font-semibold text-white/90 mb-4">Home Dashboard</h2>
             
             <div className="grid grid-cols-2 gap-4">
               {/* Box 1: Patient Caring */}
