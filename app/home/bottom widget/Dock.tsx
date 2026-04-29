@@ -76,7 +76,7 @@ function DockItem({
       onFocus={() => isHovered.set(1)}
       onBlur={() => isHovered.set(0)}
       onClick={onClick}
-      className={`relative inline-flex items-center justify-center rounded-full bg-white/5 border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] text-white hover:bg-white/10 transition-colors ${className}`}
+      className={`relative inline-flex items-center justify-center text-white/90 hover:text-white transition-colors ${className}`}
       tabIndex={0}
       role="button"
       aria-haspopup="true"
@@ -154,7 +154,7 @@ export default function Dock({
   const height = useSpring(heightRow, spring);
 
   return (
-    <div style={{ height: panelHeight, scrollbarWidth: 'none' }} className="mx-2 flex max-w-full items-center justify-center">
+    <div style={{ height: panelHeight + 8, scrollbarWidth: 'none' }} className="w-full flex items-center justify-center">
       <motion.div
         onMouseMove={({ pageX }) => {
           isHovered.set(1);
@@ -164,8 +164,8 @@ export default function Dock({
           isHovered.set(0);
           mouseX.set(Infinity);
         }}
-        className={`${className} flex items-end w-fit gap-3 rounded-full border border-white/40 bg-white/15 backdrop-blur-[40px] backdrop-saturate-200 shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.5)] pb-2 px-4`}
-        style={{ height: panelHeight }}
+        className={`${className} flex items-end justify-center gap-8 w-full rounded-t-[32px] border-t border-white/40 bg-white/15 backdrop-blur-[40px] backdrop-saturate-200 shadow-[0_-8px_40px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.5)] pb-3 pt-2 px-8`}
+        style={{ height: panelHeight + 8 }}
         role="toolbar"
         aria-label="Application dock"
       >
@@ -181,7 +181,6 @@ export default function Dock({
             baseItemSize={baseItemSize}
           >
             <DockIcon>{item.icon}</DockIcon>
-            <DockLabel>{item.label}</DockLabel>
           </DockItem>
         ))}
       </motion.div>

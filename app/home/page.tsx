@@ -11,6 +11,7 @@ export default function HomeDashboard() {
   const router = useRouter();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState("home");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const navItems = [
     {
@@ -52,13 +53,14 @@ export default function HomeDashboard() {
       )
     },
     {
-      id: "profile",
-      label: "Profile",
-      path: "/profile",
+      id: "financial",
+      label: "Financial",
+      path: "/financial",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
+          <rect x="2" y="6" width="20" height="12" rx="2" />
+          <circle cx="12" cy="12" r="2" />
+          <path d="M6 12h.01M18 12h.01" />
         </svg>
       )
     }
@@ -93,13 +95,56 @@ export default function HomeDashboard() {
                 Angel <span className="text-yellow-400">✨</span>
               </h1>
             </div>
-            <div className="h-11 w-11 rounded-full bg-gradient-to-br from-yellow-400/20 to-yellow-600/20 p-0.5 shadow-[0_0_20px_rgba(250,204,21,0.15)] animate-in fade-in slide-in-from-right-4 duration-700">
-              <div className="h-full w-full rounded-full bg-white/10 backdrop-blur-[40px] backdrop-saturate-150 flex items-center justify-center border border-white/30 shadow-[0_4px_16px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.4)]">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-400">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </div>
+            <div className="relative">
+              <button 
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="h-11 w-11 rounded-full bg-gradient-to-br from-yellow-400/20 to-yellow-600/20 p-0.5 shadow-[0_0_20px_rgba(250,204,21,0.15)] animate-in fade-in slide-in-from-right-4 duration-700 transition-transform active:scale-95"
+              >
+                <div className="h-full w-full rounded-full bg-white/10 backdrop-blur-[40px] backdrop-saturate-150 flex items-center justify-center border border-white/30 shadow-[0_4px_16px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.4)]">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-400">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </div>
+              </button>
+
+              {/* Profile Dropdown */}
+              {isProfileOpen && (
+                <>
+                  {/* Backdrop to close when clicking outside */}
+                  <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
+                  
+                  <div className="absolute right-0 top-14 w-64 z-50 rounded-3xl border border-white/30 bg-black/40 p-4 backdrop-blur-[40px] backdrop-saturate-200 shadow-[0_24px_60px_rgba(0,0,0,0.6),inset_0_1px_2px_rgba(255,255,255,0.4)] animate-in slide-in-from-top-4 fade-in duration-300">
+                    <div className="flex items-center gap-3 border-b border-white/10 pb-4 mb-2">
+                      <div className="h-10 w-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                        <span className="text-xl">✨</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white drop-shadow-md">Angel</p>
+                        <p className="text-xs text-white/50">Primary Caregiver</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors text-white/80 hover:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></svg>
+                        <span className="text-sm font-medium">Account Details</span>
+                      </button>
+                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors text-white/80 hover:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                        <span className="text-sm font-medium">Edit Patient Info</span>
+                      </button>
+                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors text-white/80 hover:text-white">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>
+                        <span className="text-sm font-medium">Settings</span>
+                      </button>
+                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/20 transition-colors text-red-400 hover:text-red-300 mt-2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                        <span className="text-sm font-medium">Log Out</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </header>
 
@@ -225,8 +270,8 @@ export default function HomeDashboard() {
         </div>
 
         {/* Floating Bottom Navigation Bar */}
-        <div className="absolute bottom-0 inset-x-0 z-50 px-6 pb-8 pt-4 pointer-events-none">
-          <div className="pointer-events-auto flex justify-center">
+        <div className="absolute bottom-0 inset-x-0 w-full z-50 pointer-events-none">
+          <div className="pointer-events-auto flex justify-center w-full">
             <Dock 
               items={navItems.map(item => ({
                 icon: <div className="text-white/70">{item.icon}</div>,
@@ -238,9 +283,9 @@ export default function HomeDashboard() {
                   }
                 }
               }))}
-              panelHeight={68}
-              baseItemSize={50}
-              magnification={58}
+              panelHeight={56}
+              baseItemSize={44}
+              magnification={54}
             />
           </div>
         </div>
