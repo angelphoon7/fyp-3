@@ -93,7 +93,7 @@ export default function CommunityPage() {
   const [isCreatingPost, setIsCreatingPost] = useState(false);
 
   const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
-  const [postPhoto, setPostPhoto] = useState<string | null>(null);
+  const [postPhotos, setPostPhotos] = useState<string[]>([]);
   
   const groupPhotoInputRef = useRef<HTMLInputElement>(null);
   const postPhotoInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +102,13 @@ export default function CommunityPage() {
     if (e.target.files && e.target.files[0]) {
       const url = URL.createObjectURL(e.target.files[0]);
       setter(url);
+    }
+  };
+
+  const handleMultiplePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const urls = Array.from(e.target.files).map(f => URL.createObjectURL(f));
+      setPostPhotos(prev => [...prev, ...urls]);
     }
   };
 
@@ -421,13 +428,13 @@ export default function CommunityPage() {
             </header>
 
             {/* Form */}
-            <div className="flex-1 p-6 space-y-6">
+            <div className="flex-1 p-6 space-y-6 flex flex-col">
               {/* User Info */}
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-full bg-gradient-to-tr from-pink-500 to-rose-600 p-[2px]">
-                  <img src="/aunty.avif" alt="Me" className="h-full w-full rounded-full object-cover" />
+                <div className="h-11 w-11 rounded-full p-[2px] border border-white/20 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)]">
+                  <img src="/avatar.jpg" alt="Angel" className="h-full w-full rounded-full object-cover" />
                 </div>
-                <span className="text-white font-bold text-[15px] tracking-wide">Mei Ling</span>
+                <span className="text-white font-bold text-[15px] tracking-wide">Angel</span>
               </div>
               
               {/* Text Input */}
@@ -435,35 +442,34 @@ export default function CommunityPage() {
                 placeholder="Share your caregiving journey, ask a question, or post an update..." 
                 rows={6} 
                 autoFocus
-                className="w-full bg-transparent text-white text-[17px] placeholder:text-white/30 focus:outline-none resize-none leading-relaxed" 
+                className="w-full bg-transparent text-white text-[17px] placeholder:text-white/30 focus:outline-none resize-none leading-relaxed flex-shrink-0" 
               />
               
-              {/* Add Photo Button */}
-              <div className="pt-4 border-t border-white/10">
-                <input type="file" ref={postPhotoInputRef} hidden accept="image/*" onChange={e => handlePhotoUpload(e, setPostPhoto)} />
-                {postPhoto && (
-                  <div className="relative w-full rounded-2xl overflow-hidden mb-4 border border-white/10">
-                    <img src={postPhoto} alt="Post preview" className="w-full h-auto object-cover max-h-48" />
-                    <button 
-                      onClick={() => setPostPhoto(null)} 
-                      className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-black/80 transition-colors"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                    </button>
-                  </div>
-                )}
-                <button 
-                  onClick={() => postPhotoInputRef.current?.click()}
-                  className="flex items-center gap-4 w-full p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-left text-white/80 group"
-                >
-                  <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform duration-300 shadow-[inset_0_1px_4px_rgba(0,0,0,0.2)]">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  </div>
-                  <div>
-                    <p className="text-[15px] font-bold text-white mb-0.5">{postPhoto ? 'Change photo' : 'Add a photo'}</p>
-                    <p className="text-xs text-white/50">Images make your posts more engaging</p>
-                  </div>
-                </button>
+              {/* Photo Upload Area (Shopee/Instagram Style) */}
+              <div>
+                <input type="file" ref={postPhotoInputRef} hidden multiple accept="image/*" onChange={handleMultiplePhotoUpload} />
+                <div className="flex flex-wrap gap-3">
+                  {postPhotos.map((url, idx) => (
+                    <div key={idx} className="relative h-24 w-24 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-sm animate-in zoom-in-95 duration-200">
+                      <img src={url} alt={`preview ${idx}`} className="h-full w-full object-cover" />
+                      <button 
+                        onClick={() => setPostPhotos(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute top-1 right-1 p-1 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-black/80 transition-colors"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Add Photo Tile */}
+                  <button 
+                    onClick={() => postPhotoInputRef.current?.click()}
+                    className="h-24 w-24 shrink-0 rounded-xl border border-dashed border-white/30 bg-white/5 hover:bg-white/10 flex flex-col items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    <span className="text-[10px] font-medium text-white/60">{postPhotos.length > 0 ? "Add More" : "Add Photo"}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
