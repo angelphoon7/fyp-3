@@ -40,8 +40,8 @@ const mockPosts: PostProps[] = [
   {
     id: "3",
     user: {
-      name: "Elena Rivera",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80"
+      name: "Natasha",
+      avatar: "/malay_caregiver.webp"
     },
     time: "1 day ago",
     imageUrl: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=800&q=80",
@@ -55,6 +55,12 @@ const communityGroups = [
   { id: '1', name: 'Morning Shift', image: '/morning.jpeg', color: 'from-orange-400 to-yellow-400' },
   { id: '3', name: 'Penang Area', image: '/penang.jpeg', color: 'from-blue-400 to-cyan-400' },
   { id: '4', name: 'Dementia Care', image: '/dementia.jpg', color: 'from-pink-400 to-rose-400' },
+  { id: 'add', name: 'New Group', icon: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  ), color: 'from-white/20 to-white/5' },
 ];
 
 export default function CommunityPage() {
@@ -146,11 +152,6 @@ export default function CommunityPage() {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14" />
                   <path d="M5 12h14" />
-                </svg>
-              </button>
-              <button className="text-white/80 hover:text-white transition-transform active:scale-90">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
               </button>
             </div>
