@@ -12,7 +12,7 @@ const mockPosts: PostProps[] = [
     id: "1",
     user: {
       name: "Mei Ling",
-      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80"
+      avatar: "/aunty.avif"
     },
     time: "2 hours ago",
     imageUrl: "/caregiver1.jpg",
@@ -26,11 +26,11 @@ const mockPosts: PostProps[] = [
   {
     id: "2",
     user: {
-      name: "Michael Chen",
-      avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=100&q=80"
+      name: "Satiyah",
+      avatar: "/india.webp"
     },
     time: "5 hours ago",
-    imageUrl: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=800&q=80",
+    imageUrl: "/medicine.jpg",
     caption: "Organizing medications is half the battle. Just spent the morning setting up the new pill organizers for the month. Does anyone have recommendations for good tracking apps? 💊",
     likes: 89,
     comments: [
