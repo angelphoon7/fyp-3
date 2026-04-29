@@ -59,6 +59,7 @@ export default function ReportPage() {
   const [checkins, setCheckins] = useState<CheckIn[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reportPeriod, setReportPeriod] = useState<"daily" | "monthly">("daily");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -81,18 +82,18 @@ export default function ReportPage() {
       .finally(() => setLoading(false));
   }, [phone]);
 
-  const last7 = checkins.slice(0, 7);
-  const medicationCompliance = last7.length
-    ? Math.round((last7.filter(c => c.medication === "YES" || c.medication === "YA").length / last7.length) * 100)
+  const periodCheckins = checkins.slice(0, reportPeriod === "daily" ? 7 : 30);
+  const medicationCompliance = periodCheckins.length
+    ? Math.round((periodCheckins.filter(c => c.medication === "YES" || c.medication === "YA").length / periodCheckins.length) * 100)
     : 0;
-  const mealCompliance = last7.length
-    ? Math.round((last7.filter(c => c.meals === "YES" || c.meals === "YA").length / last7.length) * 100)
+  const mealCompliance = periodCheckins.length
+    ? Math.round((periodCheckins.filter(c => c.meals === "YES" || c.meals === "YA").length / periodCheckins.length) * 100)
     : 0;
-  const concernCount = last7.filter(c => c.concerns === "YES" || c.concerns === "YA").length;
-  const vitals = checkins.filter(c => c.vital && !["skip", "langkau"].includes(c.vital.toLowerCase())).slice(0, 7);
-  const concernNotes = checkins.filter(c => c.concernText).slice(0, 5);
-  const avgScore = last7.length
-    ? Math.round(last7.reduce((s, c) => s + careScore(c), 0) / last7.length)
+  const concernCount = periodCheckins.filter(c => c.concerns === "YES" || c.concerns === "YA").length;
+  const vitals = checkins.filter(c => c.vital && !["skip", "langkau"].includes(c.vital.toLowerCase())).slice(0, reportPeriod === "daily" ? 7 : 30);
+  const concernNotes = checkins.filter(c => c.concernText).slice(0, reportPeriod === "daily" ? 5 : 15);
+  const avgScore = periodCheckins.length
+    ? Math.round(periodCheckins.reduce((s, c) => s + careScore(c), 0) / periodCheckins.length)
     : 0;
 
   return (
@@ -153,6 +154,22 @@ export default function ReportPage() {
         {!loading && profile && (
           <div className="flex flex-col gap-4 p-4 pb-8 z-10">
 
+            {/* Daily/Monthly Toggle */}
+            <div className="flex bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 w-full mb-2">
+              <button 
+                onClick={() => setReportPeriod("daily")}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${reportPeriod === "daily" ? "bg-yellow-400 text-slate-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
+              >
+                Daily
+              </button>
+              <button 
+                onClick={() => setReportPeriod("monthly")}
+                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${reportPeriod === "monthly" ? "bg-yellow-400 text-slate-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
+              >
+                Monthly
+              </button>
+            </div>
+
             {/* Patient profile card */}
             <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
               <div className="mb-3 flex items-start justify-between">
@@ -188,9 +205,9 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* 7-day summary stats */}
+            {/* Summary stats */}
             <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
-              <h3 className="mb-3 text-sm font-bold text-white">7-Day Summary</h3>
+              <h3 className="mb-3 text-sm font-bold text-white">{reportPeriod === "daily" ? "7-Day" : "30-Day"} Summary</h3>
               <div className="grid grid-cols-3 gap-2">
                 {/* Medication */}
                 <div className="flex flex-col items-center rounded-xl bg-slate-900/50 p-3">
@@ -219,12 +236,12 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* Daily check-in timeline */}
-            {last7.length > 0 && (
+            {/* Check-in timeline */}
+            {periodCheckins.length > 0 && (
               <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
-                <h3 className="mb-3 text-sm font-bold text-white">Daily Check-ins</h3>
-                <div className="space-y-2">
-                  {last7.map(c => {
+                <h3 className="mb-3 text-sm font-bold text-white">Check-ins</h3>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                  {periodCheckins.map(c => {
                     const score = careScore(c);
                     const medOk = c.medication === "YES" || c.medication === "YA";
                     const mealOk = c.meals === "YES" || c.meals === "YA";
@@ -299,9 +316,9 @@ export default function ReportPage() {
               <div className="space-y-1 text-xs text-teal-700 leading-relaxed">
                 <p>• Patient: <strong>{profile.patientName}</strong>, {profile.patientAge}y, {profile.mainCondition}</p>
                 <p>• Medications: <strong>{profile.medications || "None"}</strong></p>
-                <p>• 7-day medication compliance: <strong>{medicationCompliance}%</strong></p>
-                <p>• 7-day meal compliance: <strong>{mealCompliance}%</strong></p>
-                <p>• Concerns reported: <strong>{concernCount} times</strong> this week</p>
+                <p>• {reportPeriod === "daily" ? "7-day" : "30-day"} medication compliance: <strong>{medicationCompliance}%</strong></p>
+                <p>• {reportPeriod === "daily" ? "7-day" : "30-day"} meal compliance: <strong>{mealCompliance}%</strong></p>
+                <p>• Concerns reported: <strong>{concernCount} times</strong> this {reportPeriod === "daily" ? "week" : "month"}</p>
                 <p>• Average care score: <strong>{avgScore}/100</strong></p>
                 {vitals.length > 0 && (
                   <p>• Latest {profile.mainCondition?.toLowerCase().includes("diabetes") ? "blood sugar" : "blood pressure"}: <strong>{vitals[0].vital}</strong> on {formatDate(vitals[0].date)}</p>

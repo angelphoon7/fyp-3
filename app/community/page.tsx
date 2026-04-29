@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter, usePathname } from "next/navigation";
 import PixelSnow from "../onboarding/PixelSnow";
@@ -64,10 +64,49 @@ const communityGroups = [
   ), color: 'from-white/20 to-white/5' },
 ];
 
+const mockChats: Record<string, { sender: string; text: string; isMe: boolean; time: string; avatar?: string }[]> = {
+  '1': [
+    { sender: "Satiyah", avatar: "/india.webp", text: "Morning everyone! Did anyone else's patient refuse breakfast today?", isMe: false, time: "08:15 AM" },
+    { sender: "You", text: "Yes! Dad wouldn't eat his oatmeal. I had to blend it into a smoothie instead.", isMe: true, time: "08:20 AM" },
+    { sender: "Mei Ling", avatar: "/aunty.avif", text: "Smoothie is a great trick. I sometimes add a bit of honey.", isMe: false, time: "08:25 AM" },
+  ],
+  '3': [
+    { sender: "You", text: "Hi, does anyone know a good pharmacy around Georgetown that stocks liquid thickeners?", isMe: true, time: "Yesterday" },
+    { sender: "Natasha", avatar: "/malay_caregiver.webp", text: "Check out the one near the general hospital, they usually have stock.", isMe: false, time: "Yesterday" },
+  ],
+  '4': [
+    { sender: "Mei Ling", avatar: "/aunty.avif", text: "Mom wandered again last night. The door alarms are a lifesaver.", isMe: false, time: "10:00 AM" },
+    { sender: "You", text: "That's so stressful. What kind of alarm are you using?", isMe: true, time: "10:05 AM" },
+  ],
+  'bakery': [
+    { sender: "Satiyah", avatar: "/india.webp", text: "Made some sugar-free cookies for the weekend. Trying to keep the carbs low!", isMe: false, time: "Friday" },
+    { sender: "Natasha", avatar: "/malay_caregiver.webp", text: "Ooh, recipe please! 🤤", isMe: false, time: "Friday" },
+  ]
+};
+
 export default function CommunityPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState("community");
+  const [activeChatGroupId, setActiveChatGroupId] = useState<string | null>(null);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
+
+  const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
+  const [postPhoto, setPostPhoto] = useState<string | null>(null);
+  
+  const groupPhotoInputRef = useRef<HTMLInputElement>(null);
+  const postPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string | null>>) => {
+    if (e.target.files && e.target.files[0]) {
+      const url = URL.createObjectURL(e.target.files[0]);
+      setter(url);
+    }
+  };
+
+  const activeChatData = activeChatGroupId ? communityGroups.find(g => g.id === activeChatGroupId) : null;
+  const activeMessages = activeChatGroupId ? (mockChats[activeChatGroupId] || []) : [];
 
   const navItems = [
     {
@@ -149,7 +188,7 @@ export default function CommunityPage() {
               Community
             </h1>
             <div className="flex gap-4">
-              <button className="text-white/80 hover:text-white transition-transform active:scale-90">
+              <button onClick={() => setIsCreatingPost(true)} className="text-white/80 hover:text-white transition-transform active:scale-90">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14" />
                   <path d="M5 12h14" />
@@ -162,7 +201,14 @@ export default function CommunityPage() {
           <div className="w-full border-b border-white/5 bg-black/10 backdrop-blur-md pt-4 pb-2">
             <div className="flex gap-4 overflow-x-auto scrollbar-hide px-4 pb-2">
               {communityGroups.map((group) => (
-                <div key={group.id} className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group">
+                <div 
+                  key={group.id} 
+                  onClick={() => {
+                    if (group.id === 'add') setIsCreatingGroup(true);
+                    else setActiveChatGroupId(group.id);
+                  }} 
+                  className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group"
+                >
                   <div className={`p-[2px] rounded-full bg-gradient-to-tr ${group.color} transition-transform group-active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
                     <div className="h-16 w-16 rounded-full bg-[#121212] flex items-center justify-center border-2 border-black relative overflow-hidden shadow-[inset_0_1px_5px_rgba(255,255,255,0.1)]">
                       <div className="absolute inset-0 bg-white/5" />
@@ -207,6 +253,221 @@ export default function CommunityPage() {
             />
           </div>
         </div>
+
+        {/* Chat Overlay */}
+        {activeChatGroupId && activeChatData && (
+          <div className="absolute inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-3xl animate-in slide-in-from-bottom duration-300">
+            {/* Chat Header */}
+            <header className="flex items-center justify-between px-4 py-3 bg-white/5 border-b border-white/10 pt-12 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-3">
+                <button onClick={() => setActiveChatGroupId(null)} className="p-2 -ml-2 text-white/80 hover:text-white transition-colors">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m15 18-6-6 6-6"/>
+                  </svg>
+                </button>
+                <div className="flex items-center gap-3">
+                  <div className={`h-10 w-10 rounded-full bg-gradient-to-tr ${activeChatData.color} p-[2px]`}>
+                    <img src={(activeChatData as any).image} alt="" className="h-full w-full rounded-full object-cover" />
+                  </div>
+                  <div>
+                    <h2 className="text-white font-bold text-sm tracking-wide">{activeChatData.name}</h2>
+                    <p className="text-[10px] text-white/50">{activeMessages.length + 5} participants</p>
+                  </div>
+                </div>
+              </div>
+              <button className="p-2 text-white/80 hover:text-white">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+            </header>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide pb-24">
+              <div className="text-center">
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider bg-white/5 px-3 py-1 rounded-full border border-white/5">
+                  Today
+                </span>
+              </div>
+              
+              {activeMessages.map((msg, i) => (
+                <div key={i} className={`flex w-full ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`flex gap-2 max-w-[80%] ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    {!msg.isMe && msg.avatar && (
+                      <img src={msg.avatar} alt="" className="h-8 w-8 rounded-full object-cover shrink-0 mt-auto shadow-sm" />
+                    )}
+                    <div className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
+                      {!msg.isMe && (
+                        <span className="text-[11px] font-medium text-white/50 ml-1 mb-1">{msg.sender}</span>
+                      )}
+                      <div className={`px-4 py-2.5 rounded-2xl ${msg.isMe ? 'bg-gradient-to-br from-pink-500 to-rose-600 text-white rounded-br-sm shadow-[0_4px_15px_rgba(244,114,182,0.3)]' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-bl-sm border border-white/10 shadow-sm'}`}>
+                        <p className="text-sm leading-snug">{msg.text}</p>
+                      </div>
+                      <span className="text-[10px] text-white/40 mt-1">{msg.time}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Chat Input */}
+            <div className="absolute bottom-0 inset-x-0 p-4 bg-black/60 border-t border-white/10 backdrop-blur-xl pb-8 z-10">
+              <div className="flex items-center gap-2">
+                <button className="p-2 text-white/50 hover:text-white transition-colors shrink-0">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                </button>
+                <div className="flex-1 relative">
+                  <input type="text" placeholder="Message..." className="w-full bg-white/10 border border-white/10 rounded-full pl-4 pr-10 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 focus:bg-white/15 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" />
+                  <button className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 bg-pink-500 hover:bg-pink-400 transition-colors rounded-full text-white shadow-md">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Create Group Overlay */}
+        {isCreatingGroup && (
+          <div className="absolute inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-3xl animate-in slide-in-from-bottom duration-300">
+            {/* Header */}
+            <header className="flex items-center justify-between px-6 py-4 bg-white/5 border-b border-white/10 pt-14 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+              <button onClick={() => setIsCreatingGroup(false)} className="text-white/60 hover:text-white transition-colors text-sm font-medium">
+                Cancel
+              </button>
+              <h2 className="text-white font-bold text-base tracking-wide">New Group</h2>
+              <div className="w-12" /> {/* Spacer for centering */}
+            </header>
+
+            {/* Form */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-32 scrollbar-hide">
+              {/* Image Upload Area */}
+              <div className="flex flex-col items-center gap-3">
+                <input type="file" ref={groupPhotoInputRef} hidden accept="image/*" onChange={e => handlePhotoUpload(e, setGroupPhoto)} />
+                <div 
+                  onClick={() => groupPhotoInputRef.current?.click()}
+                  className="h-28 w-28 rounded-full border-2 border-dashed border-white/20 bg-white/5 flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors shadow-[inset_0_4px_20px_rgba(0,0,0,0.4)] overflow-hidden"
+                >
+                  {groupPhoto ? (
+                    <img src={groupPhoto} alt="Group" className="h-full w-full object-cover" />
+                  ) : (
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/40">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                  )}
+                </div>
+                <span className="text-xs text-white/50 font-medium tracking-wide">Add Group Photo</span>
+              </div>
+
+              {/* Inputs */}
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Group Name</label>
+                  <input type="text" placeholder="e.g., Weekend Respite Care" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-yellow-400/50 focus:bg-white/10 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Category</label>
+                  <div className="relative">
+                    <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white focus:outline-none focus:border-yellow-400/50 focus:bg-white/10 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] appearance-none">
+                      <option value="" className="bg-slate-900">Select a category...</option>
+                      <option value="medical" className="bg-slate-900">Medical Support</option>
+                      <option value="casual" className="bg-slate-900">Casual / Social</option>
+                      <option value="local" className="bg-slate-900">Local Meetups</option>
+                      <option value="advice" className="bg-slate-900">Tips & Advice</option>
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Description</label>
+                  <textarea placeholder="What is this group about?" rows={4} className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-yellow-400/50 focus:bg-white/10 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] resize-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Action */}
+            <div className="absolute bottom-0 inset-x-0 p-6 bg-black/60 border-t border-white/10 backdrop-blur-xl z-10">
+              <button 
+                onClick={() => setIsCreatingGroup(false)}
+                className="w-full bg-yellow-400 hover:bg-yellow-500 text-slate-900 font-bold text-[15px] py-4 rounded-2xl shadow-[0_0_20px_rgba(250,204,21,0.3)] transition-all active:scale-[0.98]"
+              >
+                Create Group
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Create Post Overlay */}
+        {isCreatingPost && (
+          <div className="absolute inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-3xl animate-in slide-in-from-bottom duration-300">
+            {/* Header */}
+            <header className="flex items-center justify-between px-6 py-4 bg-white/5 border-b border-white/10 pt-14 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+              <button onClick={() => setIsCreatingPost(false)} className="text-white/60 hover:text-white transition-colors text-sm font-medium">
+                Cancel
+              </button>
+              <h2 className="text-white font-bold text-base tracking-wide">New Post</h2>
+              <div className="w-12 text-right">
+                <button 
+                  onClick={() => setIsCreatingPost(false)}
+                  className="text-yellow-400 font-bold text-[15px] hover:text-yellow-300 transition-colors drop-shadow-[0_0_8px_rgba(250,204,21,0.3)]"
+                >
+                  Post
+                </button>
+              </div>
+            </header>
+
+            {/* Form */}
+            <div className="flex-1 p-6 space-y-6">
+              {/* User Info */}
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-full bg-gradient-to-tr from-pink-500 to-rose-600 p-[2px]">
+                  <img src="/aunty.avif" alt="Me" className="h-full w-full rounded-full object-cover" />
+                </div>
+                <span className="text-white font-bold text-[15px] tracking-wide">Mei Ling</span>
+              </div>
+              
+              {/* Text Input */}
+              <textarea 
+                placeholder="Share your caregiving journey, ask a question, or post an update..." 
+                rows={6} 
+                autoFocus
+                className="w-full bg-transparent text-white text-[17px] placeholder:text-white/30 focus:outline-none resize-none leading-relaxed" 
+              />
+              
+              {/* Add Photo Button */}
+              <div className="pt-4 border-t border-white/10">
+                <input type="file" ref={postPhotoInputRef} hidden accept="image/*" onChange={e => handlePhotoUpload(e, setPostPhoto)} />
+                {postPhoto && (
+                  <div className="relative w-full rounded-2xl overflow-hidden mb-4 border border-white/10">
+                    <img src={postPhoto} alt="Post preview" className="w-full h-auto object-cover max-h-48" />
+                    <button 
+                      onClick={() => setPostPhoto(null)} 
+                      className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-black/80 transition-colors"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                  </div>
+                )}
+                <button 
+                  onClick={() => postPhotoInputRef.current?.click()}
+                  className="flex items-center gap-4 w-full p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-left text-white/80 group"
+                >
+                  <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform duration-300 shadow-[inset_0_1px_4px_rgba(0,0,0,0.2)]">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-bold text-white mb-0.5">{postPhoto ? 'Change photo' : 'Add a photo'}</p>
+                    <p className="text-xs text-white/50">Images make your posts more engaging</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </IPhone13Frame>
