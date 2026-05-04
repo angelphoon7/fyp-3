@@ -22,8 +22,8 @@ export default function HomeDashboard() {
       patient: "Grandma Rose",
       status: "responses",
       responses: [
-        { id: 101, name: "Sarah Jenkins", experience: "5 yrs", rating: 4.9, avatar: "👩‍⚕️", fee: "$25/hr" },
-        { id: 102, name: "Michael Torres", experience: "3 yrs", rating: 4.7, avatar: "👨‍⚕️", fee: "$22/hr" }
+        { id: 101, name: "Natasha", experience: "5 yrs", rating: 4.9, avatar: "/malay_caregiver.webp", fee: "$25/hr" },
+        { id: 102, name: "Mei Ling", experience: "8 yrs", rating: 5.0, avatar: "/aunty.avif", fee: "$30/hr" }
       ],
       selectedCaregiver: null as number | null
     },
@@ -219,17 +219,18 @@ export default function HomeDashboard() {
             
             <div className="grid grid-cols-2 gap-4">
               {/* Box 1: Patient Caring */}
-              <SpotlightCard spotlightColor="rgba(244, 114, 182, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
-                <div className="h-32 w-full relative bg-white/5">
-                  <img src="/homecare_icon.jpg" alt="Patient Caring" className="h-full w-full object-cover object-center" />
-                
-                </div>
-                <div className="p-3.5 flex flex-col justify-between flex-1">
-                  <div>
-                    <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Patient Caring</h3>
+              <div onClick={() => router.push('/patient_caring')}>
+                <SpotlightCard spotlightColor="rgba(244, 114, 182, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
+                  <div className="h-32 w-full relative bg-white/5">
+                    <img src="/homecare_icon.jpg" alt="Patient Caring" className="h-full w-full object-cover object-center" />
                   </div>
-                </div>
-              </SpotlightCard>
+                  <div className="p-3.5 flex flex-col justify-between flex-1">
+                    <div>
+                      <h3 className="text-sm font-bold text-white mb-0.5 tracking-wide">Patient Caring</h3>
+                    </div>
+                  </div>
+                </SpotlightCard>
+              </div>
 
               {/* Box 2: Household Management */}
               <SpotlightCard spotlightColor="rgba(56, 189, 248, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
@@ -298,23 +299,10 @@ export default function HomeDashboard() {
 
         {/* Shift Requests Modal */}
         {isShiftRequestsModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsShiftRequestsModalOpen(false)} />
-            <div className="relative w-full max-h-[85vh] h-full sm:h-auto sm:max-w-md bg-[#111] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-300">
+          <div className="absolute inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsShiftRequestsModalOpen(false)} />
+            <div className="relative w-full max-h-[85%] h-full sm:h-auto sm:max-w-md bg-[#111] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-300">
               
-              <div className="flex items-center justify-between p-5 border-b border-white/10 shrink-0">
-                <div>
-                  <h2 className="text-xl font-bold text-white">Shift Requests</h2>
-                  <p className="text-xs text-white/50 mt-0.5">Manage your caregiving requests</p>
-                </div>
-                <button 
-                  onClick={() => setIsShiftRequestsModalOpen(false)}
-                  className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white/50 hover:text-white"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </button>
-              </div>
-
               <div className="p-5 overflow-y-auto flex-1 space-y-4">
                 {shiftRequests.map((request) => (
                   <div key={request.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
@@ -341,8 +329,8 @@ export default function HomeDashboard() {
                           const caregiver = request.responses.find(c => c.id === request.selectedCaregiver);
                           return caregiver && (
                             <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-xl">
-                                {caregiver.avatar}
+                              <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-xl overflow-hidden shrink-0">
+                                <img src={caregiver.avatar} alt={caregiver.name} className="h-full w-full object-cover" />
                               </div>
                               <div>
                                 <p className="text-sm font-semibold text-white">{caregiver.name}</p>
@@ -359,8 +347,8 @@ export default function HomeDashboard() {
                           {request.responses.map(caregiver => (
                             <div key={caregiver.id} className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 hover:border-yellow-500/30 transition-colors">
                               <div className="flex items-center gap-3">
-                                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center text-lg">
-                                  {caregiver.avatar}
+                                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
+                                  <img src={caregiver.avatar} alt={caregiver.name} className="h-full w-full object-cover" />
                                 </div>
                                 <div>
                                   <p className="text-sm font-medium text-white">{caregiver.name}</p>

@@ -45,6 +45,21 @@ const mockPosts: PostProps[] = [
       trustRating: "⭐ 4.9 (120 Shifts)"
     },
     time: "1 day ago",
+    imageUrl: "/india.png",
+    caption: "Tried out a traditional Ayurvedic oil massage for my patient's stiff joints today. It really seemed to soothe the pain and help with mobility! Does anyone else incorporate traditional remedies into their care routine? 🌿✨",
+    likes: 12,
+    comments: [
+      { id: "c4", user: "Mei Ling", text: "That's wonderful! I use some herbal patches for my dad's knees, they help a lot." }
+    ]
+  },
+  {
+    id: "4",
+    user: {
+      name: "Ahmad Family",
+      avatar: "/avatar.jpg",
+      trustRating: "⭐ 5.0 (New)"
+    },
+    time: "2 hours ago",
     type: "help",
     helpDetails: {
       date: "Sat, Nov 14",
@@ -53,8 +68,8 @@ const mockPosts: PostProps[] = [
       patientAge: "72",
       condition: "Dementia (Stage 2) • Mobility Assist"
     },
-    caption: "Need someone to cover my morning shift this weekend. My son is graduating so I can't be there. Very calm patient, just needs help with breakfast and light walking.",
-    likes: 12,
+    caption: "Need someone to cover our morning shift this weekend. Very calm patient, just needs help with breakfast and light walking.",
+    likes: 5,
     comments: []
   }
 ];
@@ -267,7 +282,7 @@ export default function CommunityPage() {
           {/* Feed */}
           <div className="px-4 py-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {mockPosts
-              .filter(post => feedFilter === "all" ? true : post.type === "help")
+              .filter(post => feedFilter === "all" ? post.type !== "help" : post.type === "help")
               .map((post) => (
                 <PostCard key={post.id} post={post} />
               ))}
