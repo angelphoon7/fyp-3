@@ -247,6 +247,7 @@ export default function HomeDashboard() {
               </div>
 
               {/* Box 3: Medication */}
+              <div onClick={() => router.push('/medication')}>
               <SpotlightCard spotlightColor="rgba(16, 185, 129, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
                 <div className="h-32 w-full relative bg-white/5">
                   <img src="/medicine.jpg" alt="Medication" className="h-full w-full object-cover" />
@@ -260,8 +261,10 @@ export default function HomeDashboard() {
                   </div>
                 </div>
               </SpotlightCard>
+              </div>
 
               {/* Box 4: Appointments */}
+              <div onClick={() => router.push('/appointment')}>
               <SpotlightCard spotlightColor="rgba(168, 85, 247, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
                 <div className="h-32 w-full relative bg-white/5">
                   <img src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80" alt="Appointments" className="h-full w-full object-cover" />
@@ -272,6 +275,7 @@ export default function HomeDashboard() {
                   </div>
                 </div>
               </SpotlightCard>
+              </div>
             </div>
           </div>
 

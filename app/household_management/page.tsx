@@ -5,6 +5,7 @@ import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "@/app/patient_caring/ReflectiveCard";
 import type { ReceiptResult } from "@/app/api/analyze-receipt/route";
+import { save, KEYS } from "@/app/lib/store";
 
 type Log = {
   label: string;
@@ -27,18 +28,28 @@ export default function HouseholdManagementPage() {
   const router = useRouter();
 
   const [tasks, setTasks] = useState<Task[]>([
-    { id: "cooking",   name: "Cooking Meal",       subtitle: "Tap to photograph the meal",      icon: "🍳", logs: [], hasCamera: true  },
-    { id: "cleaning",  name: "Cleaning Room",       subtitle: "Log when room is cleaned",        icon: "🧹", logs: [], hasCamera: false },
-    { id: "groceries", name: "Managing Groceries",  subtitle: "Snap receipt for expense claim",  icon: "🛒", logs: [], hasCamera: true  },
+    { id: "cooking",   name: "Cooking Meal",      subtitle: "Tap to photograph the meal",     icon: "🍳", logs: [], hasCamera: true  },
+    { id: "cleaning",  name: "Cleaning Room",      subtitle: "Log when room is cleaned",       icon: "🧹", logs: [], hasCamera: false },
+    { id: "groceries", name: "Managing Groceries", subtitle: "Snap receipt for expense claim", icon: "🛒", logs: [], hasCamera: true  },
   ]);
 
-  // Which camera session is active: "cooking" | "groceries" | null
+  // which task triggered the picker / camera
+  const [pickerTaskId, setPickerTaskId]   = useState<string | null>(null);
   const [activeCameraTask, setActiveCameraTask] = useState<string | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraError, setCameraError]     = useState<string | null>(null);
 
-  const openCamera = async (taskId: string) => {
+  const videoRef     = useRef<HTMLVideoElement>(null);
+  const streamRef    = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- picker ---
+  const openPicker = (taskId: string) => setPickerTaskId(taskId);
+  const closePicker = () => setPickerTaskId(null);
+
+  // --- camera ---
+  const openCamera = async () => {
+    const taskId = pickerTaskId;
+    closePicker();
     setCameraError(null);
     setActiveCameraTask(taskId);
     try {
@@ -74,82 +85,140 @@ export default function HouseholdManagementPage() {
     addLog(taskId, imageUrl);
   };
 
+  // --- gallery upload ---
+  const openGallery = () => {
+    closePicker();
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    // pickerTaskId is null at this point (picker was closed), so we store it before closing
+    const taskId = pendingUploadTaskRef.current;
+    if (!taskId) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => addLog(taskId, ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // store the task id before the picker closes so the file handler still knows it
+  const pendingUploadTaskRef = useRef<string | null>(null);
+
+  const openGalleryForTask = (taskId: string) => {
+    pendingUploadTaskRef.current = taskId;
+    closePicker();
+    fileInputRef.current?.click();
+  };
+
+  // --- log + receipt analysis ---
   const addLog = (taskId: string, imageUrl?: string) => {
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
     setTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t;
       const labels = ["First check in", "Second check in", "Third check in", "Fourth check in"];
-      const label = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
+      const label  = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
       const analyzing = taskId === "groceries" && !!imageUrl;
       return { ...t, logs: [...t.logs, { label, time, image: imageUrl, analyzing }] };
     }));
-
-    if (taskId === "groceries" && imageUrl) {
-      analyzeReceipt(imageUrl);
-    }
+    if (taskId === "groceries" && imageUrl) analyzeReceipt(imageUrl);
   };
 
   const analyzeReceipt = async (imageUrl: string) => {
     try {
-      const res = await fetch("/api/analyze-receipt", {
+      const res  = await fetch("/api/analyze-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
-
       setTasks(prev => prev.map(t => {
         if (t.id !== "groceries") return t;
-        return {
-          ...t,
-          logs: t.logs.map(log =>
-            log.image === imageUrl ? { ...log, receipt: data, analyzing: false } : log
-          ),
-        };
+        return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, receipt: data, analyzing: false } : log) };
       }));
     } catch {
       setTasks(prev => prev.map(t => {
         if (t.id !== "groceries") return t;
-        return {
-          ...t,
-          logs: t.logs.map(log =>
-            log.image === imageUrl ? { ...log, analyzing: false } : log
-          ),
-        };
+        return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, analyzing: false } : log) };
       }));
     }
   };
+
+  useEffect(() => { save(KEYS.householdTasks, tasks); }, [tasks]);
 
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
   }, []);
 
   const completedCount = tasks.filter(t => t.logs.length > 0).length;
-  const progressPct = Math.round((completedCount / tasks.length) * 100);
+  const progressPct    = Math.round((completedCount / tasks.length) * 100);
+
+  const pickerLabel = pickerTaskId === "groceries" ? "Receipt Photo" : "Meal Photo";
 
   return (
     <IPhone13Frame>
       <div className="relative h-dvh w-full flex-1 overflow-hidden bg-black text-white font-sans p-4 pt-10 pb-6 flex flex-col justify-center">
 
-        {/* Camera Modal */}
+        {/* Hidden file input */}
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+
+        {/* Photo picker action sheet */}
+        {pickerTaskId && (
+          <div className="absolute inset-0 z-50 flex items-end" onClick={closePicker}>
+            <div
+              className="w-full bg-black/90 backdrop-blur-xl border-t border-white/10 rounded-t-3xl p-4 pb-10 space-y-2 animate-in slide-in-from-bottom-4 duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+              <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider text-center mb-3">Add {pickerLabel}</p>
+
+              <button
+                onClick={openCamera}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-full bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-white">Take Photo</p>
+                  <p className="text-xs text-white/40">Open camera</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => openGalleryForTask(pickerTaskId)}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-full bg-blue-400/10 border border-blue-400/30 flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(96 165 250)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-white">Upload Image</p>
+                  <p className="text-xs text-white/40">Choose from gallery</p>
+                </div>
+              </button>
+
+              <button onClick={closePicker} className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 text-white/50 text-sm font-medium mt-1">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Camera modal */}
         {activeCameraTask && (
           <div className="absolute inset-0 z-50 bg-black flex flex-col">
             <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full object-cover" />
-
-            {/* Label overlay */}
             <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
-              <span className="text-xs text-white/70 font-medium">
-                {activeCameraTask === "groceries" ? "Receipt" : "Meal"}
-              </span>
+              <span className="text-xs text-white/70 font-medium">{activeCameraTask === "groceries" ? "Receipt" : "Meal"}</span>
             </div>
             <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
               <span className="text-xs text-yellow-300 font-bold tracking-wider">
                 {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
-
             <div className="absolute bottom-0 left-0 right-0 pb-10 pt-6 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center gap-10">
               <button onClick={closeCamera} className="h-12 w-12 rounded-full bg-white/10 border border-white/30 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -228,7 +297,7 @@ export default function HouseholdManagementPage() {
                   {tasks.map((task) => (
                     <div
                       key={task.id}
-                      onClick={() => task.hasCamera ? openCamera(task.id) : addLog(task.id)}
+                      onClick={() => task.hasCamera ? openPicker(task.id) : addLog(task.id)}
                       className={`relative flex flex-col p-4 rounded-xl border cursor-pointer transition-all shadow-lg backdrop-blur-sm ${task.logs.length > 0 ? "bg-yellow-400/20 border-yellow-400/40" : "bg-black/50 border-white/10 hover:border-white/30"}`}
                     >
                       <div className="flex items-center justify-between w-full">
@@ -258,44 +327,31 @@ export default function HouseholdManagementPage() {
                                 <span className="text-yellow-100/70 font-medium tracking-wide">{log.label}</span>
                                 <span className="text-yellow-300 font-bold drop-shadow-md">{log.time}</span>
                               </div>
-
                               {log.image && (
                                 <div className="h-24 w-full rounded-lg overflow-hidden border border-white/10 relative">
                                   <img src={log.image} alt="Photo" className="h-full w-full object-cover" />
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
                                   <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                                    <span className="text-[9px] text-white/60 font-medium">
-                                      {task.id === "groceries" ? "Receipt" : "Cooked Meal"}
-                                    </span>
+                                    <span className="text-[9px] text-white/60 font-medium">{task.id === "groceries" ? "Receipt" : "Cooked Meal"}</span>
                                     <span className="text-[10px] text-yellow-300 font-bold drop-shadow">{log.time}</span>
                                   </div>
                                 </div>
                               )}
-
-                              {/* Receipt analysis loading */}
                               {log.analyzing && (
                                 <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 flex items-center gap-2">
                                   <svg className="animate-spin shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                                   <span className="text-[11px] text-white/50">Reading receipt...</span>
                                 </div>
                               )}
-
-                              {/* Receipt analysis result */}
                               {log.receipt && (
                                 <div className="rounded-lg border border-yellow-400/20 bg-yellow-400/5 p-3 space-y-3">
-
-                                  {/* Store + date */}
                                   <div className="flex items-start justify-between">
                                     <div>
                                       <p className="text-[10px] text-yellow-300/70 font-bold uppercase tracking-wider">Expense Breakdown</p>
                                       <p className="text-[13px] font-bold text-white mt-0.5">{log.receipt.store || "Unknown Store"}</p>
                                     </div>
-                                    {log.receipt.date && (
-                                      <span className="text-[10px] text-white/40 mt-1">{log.receipt.date}</span>
-                                    )}
+                                    {log.receipt.date && <span className="text-[10px] text-white/40 mt-1">{log.receipt.date}</span>}
                                   </div>
-
-                                  {/* Items list */}
                                   {log.receipt.items.length > 0 && (
                                     <div className="space-y-1">
                                       {log.receipt.items.map((item, i) => (
@@ -303,15 +359,11 @@ export default function HouseholdManagementPage() {
                                           <span className="text-white/60 flex-1 pr-2 truncate">
                                             {item.qty && item.qty > 1 ? `${item.qty}x ` : ""}{item.name}
                                           </span>
-                                          <span className="text-white/80 font-medium shrink-0">
-                                            {log.receipt!.currency} {item.price.toFixed(2)}
-                                          </span>
+                                          <span className="text-white/80 font-medium shrink-0">{log.receipt!.currency} {item.price.toFixed(2)}</span>
                                         </div>
                                       ))}
                                     </div>
                                   )}
-
-                                  {/* Totals */}
                                   <div className="border-t border-white/10 pt-2 space-y-1">
                                     {log.receipt.tax > 0 && (
                                       <div className="flex justify-between text-[11px] text-white/40">
@@ -324,8 +376,6 @@ export default function HouseholdManagementPage() {
                                       <span className="text-yellow-300">{log.receipt.currency} {log.receipt.total.toFixed(2)}</span>
                                     </div>
                                   </div>
-
-                                  {/* Family claim summary */}
                                   {log.receipt.claimSummary && (
                                     <div className="border-t border-white/10 pt-2">
                                       <p className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1">Claim Note</p>

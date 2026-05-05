@@ -5,6 +5,7 @@ import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "./ReflectiveCard";
 import type { NutritionResult } from "@/app/api/analyze-meal/route";
+import { save, KEYS } from "@/app/lib/store";
 
 type Log = {
   label: string;
@@ -25,17 +26,22 @@ export default function PatientCaringPage() {
   const router = useRouter();
 
   const [patientTasks, setPatientTasks] = useState<Task[]>([
-    { id: "bathing", name: "Bathing", logs: [], icon: "🛁" },
+    { id: "bathing",  name: "Bathing",  logs: [], icon: "🛁" },
     { id: "dressing", name: "Dressing", logs: [], icon: "👕" },
-    { id: "feeding", name: "Feeding", logs: [], icon: "🥣" },
+    { id: "feeding",  name: "Feeding",  logs: [], icon: "🥣" },
   ]);
 
-  const [cameraOpen, setCameraOpen] = useState(false);
+  const [pickerOpen, setPickerOpen]   = useState(false);
+  const [cameraOpen, setCameraOpen]   = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- camera ---
   const openCamera = async () => {
+    setPickerOpen(false);
     setCameraError(null);
     setCameraOpen(true);
     try {
@@ -65,77 +71,130 @@ export default function PatientCaringPage() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext("2d")?.drawImage(video, 0, 0);
-    const imageUrl = canvas.toDataURL("image/jpeg", 0.85);
     closeCamera();
-    addMealLog(imageUrl);
+    addMealLog(canvas.toDataURL("image/jpeg", 0.85));
   };
 
+  // --- gallery upload ---
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (ev) => addMealLog(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const openGallery = () => {
+    setPickerOpen(false);
+    fileInputRef.current?.click();
+  };
+
+  // --- meal log + nutrition ---
   const addMealLog = (imageUrl: string) => {
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
     setPatientTasks(prev => prev.map(t => {
       if (t.id !== "feeding") return t;
       const labels = ["First check in", "Second check in", "Third check in", "Fourth check in"];
-      const label = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
+      const label  = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
       return { ...t, logs: [...t.logs, { label, time, image: imageUrl, analyzing: true }] };
     }));
-
-    // Analyze nutrition in the background — update the last log entry when done
     analyzeNutrition(imageUrl);
   };
 
   const analyzeNutrition = async (imageUrl: string) => {
     try {
-      const res = await fetch("/api/analyze-meal", {
+      const res  = await fetch("/api/analyze-meal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
-
-      // Match by image URL to update the correct log entry
       setPatientTasks(prev => prev.map(t => {
         if (t.id !== "feeding") return t;
-        return {
-          ...t,
-          logs: t.logs.map(log =>
-            log.image === imageUrl ? { ...log, nutrition: data, analyzing: false } : log
-          ),
-        };
+        return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, nutrition: data, analyzing: false } : log) };
       }));
     } catch {
       setPatientTasks(prev => prev.map(t => {
         if (t.id !== "feeding") return t;
-        return {
-          ...t,
-          logs: t.logs.map(log =>
-            log.image === imageUrl ? { ...log, analyzing: false } : log
-          ),
-        };
+        return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, analyzing: false } : log) };
       }));
     }
   };
-
-  useEffect(() => {
-    return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
-  }, []);
 
   const addLogToTask = (taskId: string) => {
     setPatientTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t;
       const labels = ["First check in", "Second check in", "Third check in", "Fourth check in"];
-      const label = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
-      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const label  = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
+      const time   = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       return { ...t, logs: [...t.logs, { label, time }] };
     }));
   };
+
+  useEffect(() => {
+    save(KEYS.careTasks, patientTasks);
+  }, [patientTasks]);
+
+  useEffect(() => {
+    return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
+  }, []);
 
   return (
     <IPhone13Frame>
       <div className="relative h-dvh w-full flex-1 overflow-hidden bg-black text-white font-sans p-4 pt-10 pb-6 flex flex-col justify-center">
 
-        {/* Camera Modal */}
+        {/* Hidden file input for gallery */}
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+
+        {/* Photo picker action sheet */}
+        {pickerOpen && (
+          <div className="absolute inset-0 z-50 flex items-end" onClick={() => setPickerOpen(false)}>
+            <div
+              className="w-full bg-black/90 backdrop-blur-xl border-t border-white/10 rounded-t-3xl p-4 pb-10 space-y-2 animate-in slide-in-from-bottom-4 duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+              <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider text-center mb-3">Add Meal Photo</p>
+
+              <button
+                onClick={openCamera}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-full bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-white">Take Photo</p>
+                  <p className="text-xs text-white/40">Open camera</p>
+                </div>
+              </button>
+
+              <button
+                onClick={openGallery}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              >
+                <div className="h-10 w-10 rounded-full bg-blue-400/10 border border-blue-400/30 flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(96 165 250)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-white">Upload Image</p>
+                  <p className="text-xs text-white/40">Choose from gallery</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setPickerOpen(false)}
+                className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 text-white/50 text-sm font-medium mt-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Camera modal */}
         {cameraOpen && (
           <div className="absolute inset-0 z-50 bg-black flex flex-col">
             <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full object-cover" />
@@ -221,7 +280,7 @@ export default function PatientCaringPage() {
                   {patientTasks.map((task) => (
                     <div
                       key={task.id}
-                      onClick={() => task.id === "feeding" ? openCamera() : addLogToTask(task.id)}
+                      onClick={() => task.id === "feeding" ? setPickerOpen(true) : addLogToTask(task.id)}
                       className={`relative flex flex-col p-4 rounded-xl border cursor-pointer transition-all shadow-lg backdrop-blur-sm ${task.logs.length > 0 ? "bg-yellow-400/20 border-yellow-400/40" : "bg-black/50 border-white/10 hover:border-white/30"}`}
                     >
                       <div className="flex items-center justify-between w-full">
@@ -232,7 +291,7 @@ export default function PatientCaringPage() {
                           <div>
                             <p className={`font-bold text-[15px] transition-colors drop-shadow-sm ${task.logs.length > 0 ? "text-yellow-100" : "text-white"}`}>{task.name}</p>
                             {task.id === "feeding" && (
-                              <p className="text-[11px] text-white/40 mt-0.5">Tap to take a meal photo</p>
+                              <p className="text-[11px] text-white/40 mt-0.5">Tap to log meal photo</p>
                             )}
                           </div>
                         </div>
@@ -253,7 +312,6 @@ export default function PatientCaringPage() {
                                 <span className="text-yellow-100/70 font-medium tracking-wide">{log.label}</span>
                                 <span className="text-yellow-300 font-bold drop-shadow-md">{log.time}</span>
                               </div>
-
                               {log.image && (
                                 <div className="h-24 w-full rounded-lg overflow-hidden border border-white/10 relative">
                                   <img src={log.image} alt="Meal Photo" className="h-full w-full object-cover" />
@@ -264,32 +322,27 @@ export default function PatientCaringPage() {
                                   </div>
                                 </div>
                               )}
-
-                              {/* Nutrition Card */}
                               {log.analyzing && (
                                 <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 flex items-center gap-2">
                                   <svg className="animate-spin shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                                   <span className="text-[11px] text-white/50">Estimating nutrition...</span>
                                 </div>
                               )}
-
                               {log.nutrition && (
                                 <div className="rounded-lg border border-yellow-400/20 bg-yellow-400/5 p-3 space-y-2">
                                   <div className="flex items-center justify-between">
                                     <p className="text-[10px] text-yellow-300/70 font-bold uppercase tracking-wider">Nutrition Estimate</p>
                                     <span className="text-[10px] text-white/30">AI</span>
                                   </div>
-
                                   {log.nutrition.foods.length > 0 && (
                                     <p className="text-[11px] text-white/60 leading-relaxed">{log.nutrition.foods.join(", ")}</p>
                                   )}
-
                                   <div className="grid grid-cols-4 gap-1.5">
                                     {[
-                                      { label: "Cal", value: log.nutrition.calories, unit: "kcal" },
-                                      { label: "Protein", value: log.nutrition.protein, unit: "g" },
-                                      { label: "Carbs", value: log.nutrition.carbs, unit: "g" },
-                                      { label: "Fat", value: log.nutrition.fat, unit: "g" },
+                                      { label: "Cal",    value: log.nutrition.calories, unit: "kcal" },
+                                      { label: "Protein",value: log.nutrition.protein,  unit: "g"    },
+                                      { label: "Carbs",  value: log.nutrition.carbs,    unit: "g"    },
+                                      { label: "Fat",    value: log.nutrition.fat,      unit: "g"    },
                                     ].map(({ label, value, unit }) => (
                                       <div key={label} className="bg-black/30 rounded-md p-1.5 text-center">
                                         <p className="text-[10px] text-white/40">{label}</p>
@@ -298,7 +351,6 @@ export default function PatientCaringPage() {
                                       </div>
                                     ))}
                                   </div>
-
                                   {log.nutrition.summary && (
                                     <p className="text-[10px] text-white/40 italic leading-relaxed">{log.nutrition.summary}</p>
                                   )}
