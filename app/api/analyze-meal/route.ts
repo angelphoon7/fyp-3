@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@/whatsapp/genkit";
 import { analyzeWithCloudVision } from "@/whatsapp/cloud-vision";
+import { gemini } from "@/app/lib/vertex";
 
 export interface NutritionResult {
   foods: string[];
@@ -17,9 +17,8 @@ export async function POST(req: NextRequest) {
     const { image } = await req.json();
     if (!image) return NextResponse.json({ error: "image required" }, { status: 400 });
 
-    const base64 = image.includes(',') ? image.split(',')[1] : image;
+    const base64 = image.includes(",") ? image.split(",")[1] : image;
 
-    // Cloud Vision runs first to ground Gemini with detected food labels
     let visionLabels = "";
     try {
       const cvResult = await analyzeWithCloudVision(base64);
@@ -28,7 +27,7 @@ export async function POST(req: NextRequest) {
         visionLabels = relevant.map(l => `${l.name} (${l.confidence}%)`).join(", ");
       }
     } catch {
-      // non-fatal — Gemini will still analyze the image directly
+      // non-fatal
     }
 
     const prompt = `You are a nutrition analysis assistant. Analyze this meal photo and estimate its nutritional content.
@@ -46,17 +45,10 @@ Return ONLY a valid JSON object with no markdown or extra text:
 
 All numeric values are estimates per the portion visible in the image. Use typical Malaysian/Asian meal portion sizes as reference.`;
 
-    const response = await ai.generate({
-      model: "googleai/gemini-2.5-flash",
-      prompt: [
-        { media: { url: `data:image/jpeg;base64,${base64}` } },
-        { text: prompt },
-      ],
-    });
-
-    const raw = response.text?.trim() ?? "";
-    // Strip markdown fences if Gemini wraps its JSON
-    const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+    const jsonStr  = await gemini([
+      { inlineData: { mimeType: "image/jpeg", data: base64 } },
+      { text: prompt },
+    ]);
     const nutrition = JSON.parse(jsonStr) as NutritionResult;
 
     return NextResponse.json(nutrition);
