@@ -233,6 +233,7 @@ export default function HomeDashboard() {
               </div>
 
               {/* Box 2: Household Management */}
+              <div onClick={() => router.push('/household_management')}>
               <SpotlightCard spotlightColor="rgba(56, 189, 248, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
                 <div className="h-32 w-full relative bg-white/5">
                   <img src="/household.jpg" alt="Household Management" className="h-full w-full object-cover object-center" />
@@ -243,6 +244,7 @@ export default function HomeDashboard() {
                   </div>
                 </div>
               </SpotlightCard>
+              </div>
 
               {/* Box 3: Medication */}
               <SpotlightCard spotlightColor="rgba(16, 185, 129, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">

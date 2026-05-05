@@ -3,41 +3,44 @@
 import { useState, useRef, useEffect } from "react";
 import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
-import ReflectiveCard from "./ReflectiveCard";
-import type { NutritionResult } from "@/app/api/analyze-meal/route";
+import ReflectiveCard from "@/app/patient_caring/ReflectiveCard";
+import type { ReceiptResult } from "@/app/api/analyze-receipt/route";
 
 type Log = {
   label: string;
   time: string;
   image?: string;
-  nutrition?: NutritionResult;
+  receipt?: ReceiptResult;
   analyzing?: boolean;
 };
 
 type Task = {
   id: string;
   name: string;
-  logs: Log[];
+  subtitle: string;
   icon: string;
+  logs: Log[];
+  hasCamera: boolean;
 };
 
-export default function PatientCaringPage() {
+export default function HouseholdManagementPage() {
   const router = useRouter();
 
-  const [patientTasks, setPatientTasks] = useState<Task[]>([
-    { id: "bathing", name: "Bathing", logs: [], icon: "🛁" },
-    { id: "dressing", name: "Dressing", logs: [], icon: "👕" },
-    { id: "feeding", name: "Feeding", logs: [], icon: "🥣" },
+  const [tasks, setTasks] = useState<Task[]>([
+    { id: "cooking",   name: "Cooking Meal",       subtitle: "Tap to photograph the meal",      icon: "🍳", logs: [], hasCamera: true  },
+    { id: "cleaning",  name: "Cleaning Room",       subtitle: "Log when room is cleaned",        icon: "🧹", logs: [], hasCamera: false },
+    { id: "groceries", name: "Managing Groceries",  subtitle: "Snap receipt for expense claim",  icon: "🛒", logs: [], hasCamera: true  },
   ]);
 
-  const [cameraOpen, setCameraOpen] = useState(false);
+  // Which camera session is active: "cooking" | "groceries" | null
+  const [activeCameraTask, setActiveCameraTask] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const openCamera = async () => {
+  const openCamera = async (taskId: string) => {
     setCameraError(null);
-    setCameraOpen(true);
+    setActiveCameraTask(taskId);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -47,46 +50,49 @@ export default function PatientCaringPage() {
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch {
       setCameraError("Camera access denied. Please allow camera permission.");
-      setCameraOpen(false);
+      setActiveCameraTask(null);
     }
   };
 
   const closeCamera = () => {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
-    setCameraOpen(false);
+    setActiveCameraTask(null);
     setCameraError(null);
   };
 
   const capturePhoto = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || !activeCameraTask) return;
     const video = videoRef.current;
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext("2d")?.drawImage(video, 0, 0);
     const imageUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const taskId = activeCameraTask;
     closeCamera();
-    addMealLog(imageUrl);
+    addLog(taskId, imageUrl);
   };
 
-  const addMealLog = (imageUrl: string) => {
+  const addLog = (taskId: string, imageUrl?: string) => {
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-    setPatientTasks(prev => prev.map(t => {
-      if (t.id !== "feeding") return t;
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
       const labels = ["First check in", "Second check in", "Third check in", "Fourth check in"];
       const label = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
-      return { ...t, logs: [...t.logs, { label, time, image: imageUrl, analyzing: true }] };
+      const analyzing = taskId === "groceries" && !!imageUrl;
+      return { ...t, logs: [...t.logs, { label, time, image: imageUrl, analyzing }] };
     }));
 
-    // Analyze nutrition in the background — update the last log entry when done
-    analyzeNutrition(imageUrl);
+    if (taskId === "groceries" && imageUrl) {
+      analyzeReceipt(imageUrl);
+    }
   };
 
-  const analyzeNutrition = async (imageUrl: string) => {
+  const analyzeReceipt = async (imageUrl: string) => {
     try {
-      const res = await fetch("/api/analyze-meal", {
+      const res = await fetch("/api/analyze-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: imageUrl }),
@@ -94,19 +100,18 @@ export default function PatientCaringPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
 
-      // Match by image URL to update the correct log entry
-      setPatientTasks(prev => prev.map(t => {
-        if (t.id !== "feeding") return t;
+      setTasks(prev => prev.map(t => {
+        if (t.id !== "groceries") return t;
         return {
           ...t,
           logs: t.logs.map(log =>
-            log.image === imageUrl ? { ...log, nutrition: data, analyzing: false } : log
+            log.image === imageUrl ? { ...log, receipt: data, analyzing: false } : log
           ),
         };
       }));
     } catch {
-      setPatientTasks(prev => prev.map(t => {
-        if (t.id !== "feeding") return t;
+      setTasks(prev => prev.map(t => {
+        if (t.id !== "groceries") return t;
         return {
           ...t,
           logs: t.logs.map(log =>
@@ -121,29 +126,30 @@ export default function PatientCaringPage() {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
   }, []);
 
-  const addLogToTask = (taskId: string) => {
-    setPatientTasks(prev => prev.map(t => {
-      if (t.id !== taskId) return t;
-      const labels = ["First check in", "Second check in", "Third check in", "Fourth check in"];
-      const label = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
-      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      return { ...t, logs: [...t.logs, { label, time }] };
-    }));
-  };
+  const completedCount = tasks.filter(t => t.logs.length > 0).length;
+  const progressPct = Math.round((completedCount / tasks.length) * 100);
 
   return (
     <IPhone13Frame>
       <div className="relative h-dvh w-full flex-1 overflow-hidden bg-black text-white font-sans p-4 pt-10 pb-6 flex flex-col justify-center">
 
         {/* Camera Modal */}
-        {cameraOpen && (
+        {activeCameraTask && (
           <div className="absolute inset-0 z-50 bg-black flex flex-col">
             <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full object-cover" />
+
+            {/* Label overlay */}
+            <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
+              <span className="text-xs text-white/70 font-medium">
+                {activeCameraTask === "groceries" ? "Receipt" : "Meal"}
+              </span>
+            </div>
             <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
               <span className="text-xs text-yellow-300 font-bold tracking-wider">
                 {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
+
             <div className="absolute bottom-0 left-0 right-0 pb-10 pt-6 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center gap-10">
               <button onClick={closeCamera} className="h-12 w-12 rounded-full bg-white/10 border border-white/30 flex items-center justify-center">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -159,7 +165,7 @@ export default function PatientCaringPage() {
           </div>
         )}
 
-        {/* Reflective Card Content */}
+        {/* Card */}
         <div className="relative max-h-full flex flex-col">
           <ReflectiveCard
             overlayColor="rgba(0, 0, 0, 0.4)"
@@ -175,69 +181,68 @@ export default function PatientCaringPage() {
             className="h-fit max-h-full w-full shadow-[0_20px_50px_rgba(234,179,8,0.2)]"
           >
             <div className="flex flex-col h-fit max-h-[80vh] overflow-hidden p-5">
+
+              {/* Header */}
               <div className="flex items-center justify-between pb-5 border-b border-white/20 shrink-0">
                 <div className="flex items-center gap-3">
                   <button onClick={() => router.push('/home')} className="shrink-0 text-white/50 hover:text-white transition-colors">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                   </button>
                   <div>
-                    <h2 className="text-xl font-bold text-white drop-shadow-md">Patient Caring</h2>
-                    <p className="text-xs text-white/70 mt-0.5">Log daily care activities</p>
+                    <h2 className="text-xl font-bold text-white drop-shadow-md">Household</h2>
+                    <p className="text-xs text-white/70 mt-0.5">Daily household tasks</p>
                   </div>
                 </div>
               </div>
 
               <div className="overflow-y-auto pt-5 space-y-4 scrollbar-hide pb-2">
 
-                {/* Progress Overview */}
+                {/* Progress */}
                 <div className="mb-6 p-4 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md shadow-inner">
                   <div className="flex justify-between items-end mb-2">
                     <div>
                       <p className="text-xs text-white/70 font-bold uppercase tracking-wider mb-1">Today's Progress</p>
                       <p className="text-lg font-bold text-white drop-shadow-md">
-                        {patientTasks.filter(t => t.logs.length > 0).length}{" "}
-                        <span className="text-sm text-white/50 font-normal">/ {patientTasks.length} tasks</span>
+                        {completedCount}{" "}
+                        <span className="text-sm text-white/50 font-normal">/ {tasks.length} tasks</span>
                       </p>
                     </div>
                     <div className="h-12 w-12 rounded-full border-[3px] border-white/20 flex items-center justify-center relative shadow-[0_0_15px_rgba(234,179,8,0.2)]">
                       <svg className="absolute inset-0 h-full w-full -rotate-90 transform" viewBox="0 0 36 36">
                         <path
                           className="text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.5)]"
-                          strokeDasharray={`${(patientTasks.filter(t => t.logs.length > 0).length / patientTasks.length) * 100}, 100`}
+                          strokeDasharray={`${progressPct}, 100`}
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                           fill="none"
                           stroke="currentColor"
                           strokeWidth="3"
                         />
                       </svg>
-                      <span className="text-xs font-bold text-white relative z-10 drop-shadow-md">
-                        {Math.round((patientTasks.filter(t => t.logs.length > 0).length / patientTasks.length) * 100)}%
-                      </span>
+                      <span className="text-xs font-bold text-white relative z-10 drop-shadow-md">{progressPct}%</span>
                     </div>
                   </div>
                 </div>
 
+                {/* Tasks */}
                 <div className="space-y-3">
-                  {patientTasks.map((task) => (
+                  {tasks.map((task) => (
                     <div
                       key={task.id}
-                      onClick={() => task.id === "feeding" ? openCamera() : addLogToTask(task.id)}
+                      onClick={() => task.hasCamera ? openCamera(task.id) : addLog(task.id)}
                       className={`relative flex flex-col p-4 rounded-xl border cursor-pointer transition-all shadow-lg backdrop-blur-sm ${task.logs.length > 0 ? "bg-yellow-400/20 border-yellow-400/40" : "bg-black/50 border-white/10 hover:border-white/30"}`}
                     >
                       <div className="flex items-center justify-between w-full">
                         <div className="flex items-center gap-4">
-                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-2xl transition-colors shadow-inner ${task.logs.length > 0 ? "bg-yellow-400/30 text-yellow-300" : "bg-white/10 text-white/60"}`}>
+                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-2xl transition-colors shadow-inner ${task.logs.length > 0 ? "bg-yellow-400/30" : "bg-white/10"}`}>
                             {task.icon}
                           </div>
                           <div>
-                            <p className={`font-bold text-[15px] transition-colors drop-shadow-sm ${task.logs.length > 0 ? "text-yellow-100" : "text-white"}`}>{task.name}</p>
-                            {task.id === "feeding" && (
-                              <p className="text-[11px] text-white/40 mt-0.5">Tap to take a meal photo</p>
-                            )}
+                            <p className={`font-bold text-[15px] drop-shadow-sm ${task.logs.length > 0 ? "text-yellow-100" : "text-white"}`}>{task.name}</p>
+                            <p className="text-[11px] text-white/40 mt-0.5">{task.subtitle}</p>
                           </div>
                         </div>
-                        <div className={`h-8 w-8 shrink-0 rounded-full border flex items-center justify-center transition-colors ${task.id === "feeding" ? "border-yellow-400/40 bg-yellow-400/10" : "border-white/20 bg-white/5 hover:bg-white/10"}`}>
-                          {task.id === "feeding" ? (
+                        <div className={`h-8 w-8 shrink-0 rounded-full border flex items-center justify-center transition-colors ${task.hasCamera ? "border-yellow-400/40 bg-yellow-400/10" : "border-white/20 bg-white/5 hover:bg-white/10"}`}>
+                          {task.hasCamera ? (
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                           ) : (
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
@@ -256,51 +261,76 @@ export default function PatientCaringPage() {
 
                               {log.image && (
                                 <div className="h-24 w-full rounded-lg overflow-hidden border border-white/10 relative">
-                                  <img src={log.image} alt="Meal Photo" className="h-full w-full object-cover" />
+                                  <img src={log.image} alt="Photo" className="h-full w-full object-cover" />
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
                                   <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                                    <span className="text-[9px] text-white/60 font-medium">Meal Photo</span>
+                                    <span className="text-[9px] text-white/60 font-medium">
+                                      {task.id === "groceries" ? "Receipt" : "Cooked Meal"}
+                                    </span>
                                     <span className="text-[10px] text-yellow-300 font-bold drop-shadow">{log.time}</span>
                                   </div>
                                 </div>
                               )}
 
-                              {/* Nutrition Card */}
+                              {/* Receipt analysis loading */}
                               {log.analyzing && (
                                 <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 flex items-center gap-2">
                                   <svg className="animate-spin shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                                  <span className="text-[11px] text-white/50">Estimating nutrition...</span>
+                                  <span className="text-[11px] text-white/50">Reading receipt...</span>
                                 </div>
                               )}
 
-                              {log.nutrition && (
-                                <div className="rounded-lg border border-yellow-400/20 bg-yellow-400/5 p-3 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <p className="text-[10px] text-yellow-300/70 font-bold uppercase tracking-wider">Nutrition Estimate</p>
-                                    <span className="text-[10px] text-white/30">AI</span>
+                              {/* Receipt analysis result */}
+                              {log.receipt && (
+                                <div className="rounded-lg border border-yellow-400/20 bg-yellow-400/5 p-3 space-y-3">
+
+                                  {/* Store + date */}
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <p className="text-[10px] text-yellow-300/70 font-bold uppercase tracking-wider">Expense Breakdown</p>
+                                      <p className="text-[13px] font-bold text-white mt-0.5">{log.receipt.store || "Unknown Store"}</p>
+                                    </div>
+                                    {log.receipt.date && (
+                                      <span className="text-[10px] text-white/40 mt-1">{log.receipt.date}</span>
+                                    )}
                                   </div>
 
-                                  {log.nutrition.foods.length > 0 && (
-                                    <p className="text-[11px] text-white/60 leading-relaxed">{log.nutrition.foods.join(", ")}</p>
+                                  {/* Items list */}
+                                  {log.receipt.items.length > 0 && (
+                                    <div className="space-y-1">
+                                      {log.receipt.items.map((item, i) => (
+                                        <div key={i} className="flex justify-between items-center text-[11px]">
+                                          <span className="text-white/60 flex-1 pr-2 truncate">
+                                            {item.qty && item.qty > 1 ? `${item.qty}x ` : ""}{item.name}
+                                          </span>
+                                          <span className="text-white/80 font-medium shrink-0">
+                                            {log.receipt!.currency} {item.price.toFixed(2)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   )}
 
-                                  <div className="grid grid-cols-4 gap-1.5">
-                                    {[
-                                      { label: "Cal", value: log.nutrition.calories, unit: "kcal" },
-                                      { label: "Protein", value: log.nutrition.protein, unit: "g" },
-                                      { label: "Carbs", value: log.nutrition.carbs, unit: "g" },
-                                      { label: "Fat", value: log.nutrition.fat, unit: "g" },
-                                    ].map(({ label, value, unit }) => (
-                                      <div key={label} className="bg-black/30 rounded-md p-1.5 text-center">
-                                        <p className="text-[10px] text-white/40">{label}</p>
-                                        <p className="text-[12px] font-bold text-white leading-tight">{value}</p>
-                                        <p className="text-[9px] text-white/30">{unit}</p>
+                                  {/* Totals */}
+                                  <div className="border-t border-white/10 pt-2 space-y-1">
+                                    {log.receipt.tax > 0 && (
+                                      <div className="flex justify-between text-[11px] text-white/40">
+                                        <span>Tax</span>
+                                        <span>{log.receipt.currency} {log.receipt.tax.toFixed(2)}</span>
                                       </div>
-                                    ))}
+                                    )}
+                                    <div className="flex justify-between text-[13px] font-bold">
+                                      <span className="text-yellow-300">Total</span>
+                                      <span className="text-yellow-300">{log.receipt.currency} {log.receipt.total.toFixed(2)}</span>
+                                    </div>
                                   </div>
 
-                                  {log.nutrition.summary && (
-                                    <p className="text-[10px] text-white/40 italic leading-relaxed">{log.nutrition.summary}</p>
+                                  {/* Family claim summary */}
+                                  {log.receipt.claimSummary && (
+                                    <div className="border-t border-white/10 pt-2">
+                                      <p className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1">Claim Note</p>
+                                      <p className="text-[11px] text-white/60 leading-relaxed italic">{log.receipt.claimSummary}</p>
+                                    </div>
                                   )}
                                 </div>
                               )}
