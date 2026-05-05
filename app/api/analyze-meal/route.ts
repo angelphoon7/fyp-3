@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ai } from "@/whatsapp/genkit";
 import { analyzeWithCloudVision } from "@/whatsapp/cloud-vision";
-import { gemini } from "@/app/lib/vertex";
 
 export interface NutritionResult {
   foods: string[];
@@ -45,10 +45,16 @@ Return ONLY a valid JSON object with no markdown or extra text:
 
 All numeric values are estimates per the portion visible in the image. Use typical Malaysian/Asian meal portion sizes as reference.`;
 
-    const jsonStr  = await gemini([
-      { inlineData: { mimeType: "image/jpeg", data: base64 } },
-      { text: prompt },
-    ]);
+    const response = await ai.generate({
+      model: "googleai/gemini-2.5-flash",
+      prompt: [
+        { media: { url: `data:image/jpeg;base64,${base64}` } },
+        { text: prompt },
+      ],
+    });
+
+    const raw      = response.text?.trim() ?? "";
+    const jsonStr  = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const nutrition = JSON.parse(jsonStr) as NutritionResult;
 
     return NextResponse.json(nutrition);

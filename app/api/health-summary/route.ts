@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleAuth } from "google-auth-library";
+import { ai } from "@/whatsapp/genkit";
 
 export interface HealthSummaryResult {
   overallStatus: "Good" | "Fair" | "Needs Attention";
@@ -10,80 +10,52 @@ export interface HealthSummaryResult {
   recommendation: string;
 }
 
-let _auth: GoogleAuth | null = null;
-
-function getAuth() {
-  if (!_auth) {
-    _auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
-  }
-  return _auth;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const { careTasks, medications, appointments, householdTasks } = await req.json();
 
-    const auth      = getAuth();
-    const projectId = await auth.getProjectId();
-    const client    = await auth.getClient();
-    const { token } = await client.getAccessToken();
-    if (!token) throw new Error("Failed to get access token from ADC.");
+    const prompt = `You are a warm, caring companion helping a family caregiver keep track of their loved one's daily routine. You write like a supportive friend — natural, kind, and grounded. You do NOT give medical advice, diagnoses, or act like a doctor.
 
-    const location = "us-central1";
-    const model    = "gemini-2.5-flash";
-    const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+Here is today's activity data from the caregiver app:
 
-    const prompt = `You are a home-care health analyst. Based on the following activity data logged by a caregiver app, generate a concise health status report.
-
-CARE TASKS (bathing, dressing, feeding logs today):
+CARE TASKS (bathing, dressing, feeding):
 ${JSON.stringify(careTasks ?? [], null, 2)}
 
-MEDICATIONS (schedule + taken status):
+MEDICATIONS (taken or pending):
 ${JSON.stringify(medications ?? [], null, 2)}
 
-APPOINTMENTS (upcoming hospital visits):
+APPOINTMENTS:
 ${JSON.stringify(appointments ?? [], null, 2)}
 
-HOUSEHOLD TASKS (cooking, cleaning, groceries logs):
+HOUSEHOLD TASKS:
 ${JSON.stringify(householdTasks ?? [], null, 2)}
+
+Write a short daily check-in summary for the caregiver. Sound like a caring friend catching up — warm, real, and simple. No clinical language, no medical terms, no advice that sounds like it comes from a doctor.
 
 Return ONLY valid JSON with no markdown:
 {
   "overallStatus": "Good",
   "score": 85,
-  "summary": "2-3 sentence plain-language summary of the patient's overall care status today",
-  "highlights": ["Positive finding 1", "Positive finding 2"],
-  "concerns": ["Concern 1 if any"],
-  "recommendation": "One actionable recommendation for the caregiver"
+  "summary": "2-3 sentences written like a friend checking in — mention what went well today and any small things to keep an eye on. Use 'they' for the patient.",
+  "highlights": ["A warm, simple note about something that went well today", "Another positive observation"],
+  "concerns": ["A gentle, non-alarming note if something was missed — no drama"],
+  "recommendation": "One small, practical thing the caregiver can do — phrased like friendly advice, not a prescription"
 }
 
 Rules:
-- overallStatus must be exactly one of: "Good", "Fair", "Needs Attention"
+- overallStatus must be exactly "Good", "Fair", or "Needs Attention"
 - score is 0-100
-- highlights and concerns are short bullet strings (max 3 each)
-- If no concerns, return empty array
-- Be encouraging but honest`;
+- Max 3 highlights, max 2 concerns
+- If nothing was missed, return empty concerns array
+- Never say things like "consult a doctor", "seek medical attention", "clinical", "diagnosis", "symptoms"
+- Write as if texting a friend, not writing a report`;
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" },
-      }),
-      signal: AbortSignal.timeout(30000),
+    const response = await ai.generate({
+      model: "googleai/gemini-2.5-flash",
+      prompt: [{ text: prompt }],
     });
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Vertex AI error ${res.status}: ${body.substring(0, 200)}`);
-    }
-
-    const data    = await res.json();
-    const raw     = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const raw     = response.text?.trim() ?? "";
     const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const result  = JSON.parse(jsonStr) as HealthSummaryResult;
 
