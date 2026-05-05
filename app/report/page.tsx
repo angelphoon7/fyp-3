@@ -3,362 +3,526 @@
 import { useEffect, useState } from "react";
 import IPhone13Frame from "@/components/iPhone13Frame";
 import Galaxy from "./Galaxy";
+import { load, KEYS } from "@/app/lib/store";
+import type { HealthSummaryResult } from "@/app/api/health-summary/route";
 
-interface CheckIn {
-  date: string;
-  medication?: string;
-  meals?: string;
-  concerns?: string;
-  vital?: string;
-  concernText?: string;
+// ── types mirroring each feature page ────────────────────────────────────────
+
+type CareLog  = { label: string; time: string; image?: string };
+type CareTask = { id: string; name: string; icon: string; logs: CareLog[] };
+
+type MedSchedule = { id: string; period: string; time: string; taken: boolean; takenAt?: string };
+type Medication  = { id: string; name: string; dosage: string; schedules: MedSchedule[] };
+
+type Appointment = { id: string; hospital: string; date: string; time: string; notes: string };
+
+type HouseLog  = { label: string; time: string; image?: string };
+type HouseTask = { id: string; name: string; icon: string; logs: HouseLog[] };
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function scoreColor(s: number) {
+  if (s >= 80) return "text-emerald-400";
+  if (s >= 55) return "text-yellow-400";
+  return "text-red-400";
 }
 
-interface Profile {
-  caregiverName?: string;
-  patientName?: string;
-  patientAge?: string;
-  mainCondition?: string;
-  medications?: string;
-  relationship?: string;
-  checkInTime?: string;
-  familyName?: string;
-  familyPhone?: string;
-  language?: "en" | "ms";
-  phone?: string;
+function scoreBg(s: number) {
+  if (s >= 80) return "border-emerald-500/30 bg-emerald-500/10";
+  if (s >= 55) return "border-yellow-500/30 bg-yellow-500/10";
+  return "border-red-500/30 bg-red-500/10";
 }
 
-function careScore(c: CheckIn): number {
-  const medOk = c.medication === "YES" || c.medication === "YA";
-  const mealOk = c.meals === "YES" || c.meals === "YA";
-  const noConcern = c.concerns !== "YES" && c.concerns !== "YA";
-  return (medOk ? 50 : 0) + (mealOk ? 15 : 0) + (noConcern ? 35 : 0);
+function formatDate(d: string) {
+  if (!d) return "";
+  return new Date(d + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function scoreColor(score: number) {
-  if (score === 100) return "text-emerald-600 bg-emerald-50";
-  if (score >= 80) return "text-yellow-600 bg-yellow-50";
-  if (score >= 50) return "text-orange-600 bg-orange-50";
-  return "text-red-600 bg-red-50";
+function formatTime(t: string) {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
 
-function scoreLabel(score: number) {
-  if (score === 100) return "All Good";
-  if (score >= 80) return "At Risk";
-  if (score >= 50) return "Attention";
-  return "High Risk";
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
+// ── component ─────────────────────────────────────────────────────────────────
 
 export default function ReportPage() {
-  const [phone, setPhone] = useState("");
-  const [input, setInput] = useState("");
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [checkins, setCheckins] = useState<CheckIn[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [reportPeriod, setReportPeriod] = useState<"daily" | "monthly">("daily");
+  const [careTasks,      setCareTasks]      = useState<CareTask[]>([]);
+  const [medications,    setMedications]    = useState<Medication[]>([]);
+  const [appointments,   setAppointments]   = useState<Appointment[]>([]);
+  const [householdTasks, setHouseholdTasks] = useState<HouseTask[]>([]);
 
+  const [aiSummary,    setAiSummary]   = useState<HealthSummaryResult | null>(null);
+  const [generating,   setGenerating]  = useState(false);
+  const [aiError,      setAiError]     = useState<string | null>(null);
+  const [downloading,  setDownloading] = useState(false);
+
+  // Load from localStorage on mount
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const p = params.get("phone");
-    if (p) { setPhone(p); setInput(p); }
+    setCareTasks(load<CareTask[]>(KEYS.careTasks, []));
+    setMedications(load<Medication[]>(KEYS.medications, []));
+    setAppointments(load<Appointment[]>(KEYS.appointments, []));
+    setHouseholdTasks(load<HouseTask[]>(KEYS.householdTasks, []));
   }, []);
 
-  useEffect(() => {
-    if (!phone) return;
-    setLoading(true);
-    setError("");
-    fetch(`/api/report?phone=${encodeURIComponent(phone)}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { setError(d.error); return; }
-        setProfile(d.profile);
-        setCheckins(d.checkins);
-      })
-      .catch(() => setError("Failed to load report"))
-      .finally(() => setLoading(false));
-  }, [phone]);
+  // ── derived stats ─────────────────────────────────────────────────────────
 
-  const periodCheckins = checkins.slice(0, reportPeriod === "daily" ? 7 : 30);
-  const medicationCompliance = periodCheckins.length
-    ? Math.round((periodCheckins.filter(c => c.medication === "YES" || c.medication === "YA").length / periodCheckins.length) * 100)
-    : 0;
-  const mealCompliance = periodCheckins.length
-    ? Math.round((periodCheckins.filter(c => c.meals === "YES" || c.meals === "YA").length / periodCheckins.length) * 100)
-    : 0;
-  const concernCount = periodCheckins.filter(c => c.concerns === "YES" || c.concerns === "YA").length;
-  const vitals = checkins.filter(c => c.vital && !["skip", "langkau"].includes(c.vital.toLowerCase())).slice(0, reportPeriod === "daily" ? 7 : 30);
-  const concernNotes = checkins.filter(c => c.concernText).slice(0, reportPeriod === "daily" ? 5 : 15);
-  const avgScore = periodCheckins.length
-    ? Math.round(periodCheckins.reduce((s, c) => s + careScore(c), 0) / periodCheckins.length)
-    : 0;
+  const careCompleted  = careTasks.filter(t => t.logs.length > 0).length;
+  const careTotal      = careTasks.length;
+
+  const medTotal  = medications.reduce((s, m) => s + m.schedules.length, 0);
+  const medTaken  = medications.reduce((s, m) => s + m.schedules.filter(sc => sc.taken).length, 0);
+  const medPct    = medTotal > 0 ? Math.round((medTaken / medTotal) * 100) : 0;
+
+  const upcomingAppts = appointments
+    .filter(a => new Date(a.date + "T" + a.time) >= new Date())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 3);
+
+  const houseCompleted = householdTasks.filter(t => t.logs.length > 0).length;
+  const houseTotal     = householdTasks.length;
+
+  // Simple overall score: care 40% + medication 40% + household 20%
+  const overallScore = Math.round(
+    (careTotal  > 0 ? (careCompleted  / careTotal)  * 40 : 0) +
+    (medTotal   > 0 ? (medPct / 100) * 40            : 0) +
+    (houseTotal > 0 ? (houseCompleted / houseTotal) * 20 : 0)
+  );
+
+  const hasAnyData = careTotal > 0 || medTotal > 0 || appointments.length > 0 || houseTotal > 0;
+
+  // ── AI summary ────────────────────────────────────────────────────────────
+
+  const downloadPDF = async () => {
+    setDownloading(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+      const pageW = doc.internal.pageSize.getWidth();
+      const margin = 16;
+      const colW   = pageW - margin * 2;
+      let y = 20;
+
+      const nl = (extra = 0) => { y += 6 + extra; };
+      const section = (title: string) => {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFillColor(30, 30, 30);
+        doc.rect(margin, y - 4, colW, 8, "F");
+        doc.setFontSize(8).setTextColor(180, 180, 180).setFont("helvetica", "bold");
+        doc.text(title.toUpperCase(), margin + 2, y + 1);
+        y += 8;
+      };
+      const row = (label: string, value: string, color?: [number, number, number]) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFontSize(9).setTextColor(80, 80, 80).setFont("helvetica", "normal");
+        doc.text(label, margin, y);
+        doc.setTextColor(...(color ?? [30, 30, 30] as [number,number,number])).setFont("helvetica", "bold");
+        doc.text(value, margin + 55, y);
+        nl();
+      };
+      const body = (text: string) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        const lines = doc.splitTextToSize(text, colW) as string[];
+        doc.setFontSize(9).setTextColor(60, 60, 60).setFont("helvetica", "normal");
+        doc.text(lines, margin, y);
+        y += lines.length * 5;
+      };
+
+      // ── Title ──────────────────────────────────────────────────────────
+      doc.setFontSize(18).setTextColor(20, 20, 20).setFont("helvetica", "bold");
+      doc.text("KAI Health Report", margin, y); nl(2);
+      doc.setFontSize(9).setTextColor(120, 120, 120).setFont("helvetica", "normal");
+      doc.text(new Date().toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" }), margin, y);
+      nl(6);
+
+      // ── Overall Score ──────────────────────────────────────────────────
+      section("Overall Care Score");
+      row("Score", `${overallScore}/100`);
+      row("Status", overallScore >= 80 ? "Good" : overallScore >= 55 ? "Fair" : "Needs Attention",
+        overallScore >= 80 ? [16, 185, 129] : overallScore >= 55 ? [234, 179, 8] : [239, 68, 68]);
+      nl(2);
+
+      // ── Care Tasks ─────────────────────────────────────────────────────
+      if (careTasks.length > 0) {
+        section("Patient Care");
+        row("Completed", `${careCompleted} / ${careTotal} tasks`);
+        careTasks.forEach(t => row(`  ${t.name}`, t.logs.length > 0 ? `✓ ${t.logs.length} check-in(s)` : "Not logged"));
+        nl(2);
+      }
+
+      // ── Medication ─────────────────────────────────────────────────────
+      if (medications.length > 0) {
+        section("Medication");
+        row("Adherence", `${medPct}% (${medTaken}/${medTotal} doses)`);
+        medications.forEach(m => {
+          const taken = m.schedules.filter(s => s.taken).length;
+          row(`  ${m.name} ${m.dosage}`, `${taken}/${m.schedules.length} taken`);
+          m.schedules.forEach(s => {
+            doc.setFontSize(8).setTextColor(120, 120, 120).setFont("helvetica", "normal");
+            const info = s.taken ? `✓ Taken at ${s.takenAt}` : `○ ${s.time} — not yet taken`;
+            doc.text(`       ${s.period}: ${info}`, margin, y);
+            nl();
+          });
+        });
+        nl(2);
+      }
+
+      // ── Appointments ───────────────────────────────────────────────────
+      if (appointments.length > 0) {
+        section("Appointments");
+        appointments.forEach(a => {
+          row(`  ${a.hospital}`, `${formatDate(a.date)}  ${formatTime(a.time)}`);
+          if (a.notes) {
+            doc.setFontSize(8).setTextColor(130, 130, 130).setFont("helvetica", "italic");
+            doc.text(`       ${a.notes}`, margin, y); nl();
+          }
+        });
+        nl(2);
+      }
+
+      // ── Household ──────────────────────────────────────────────────────
+      if (householdTasks.length > 0) {
+        section("Household Tasks");
+        row("Completed", `${houseCompleted} / ${houseTotal} tasks`);
+        householdTasks.forEach(t => row(`  ${t.name}`, t.logs.length > 0 ? `✓ Done` : "Not done"));
+        nl(2);
+      }
+
+      // ── AI Summary ─────────────────────────────────────────────────────
+      if (aiSummary) {
+        section("AI Health Summary");
+        row("Status", aiSummary.overallStatus);
+        row("Score",  `${aiSummary.score}/100`);
+        nl(1);
+        body(aiSummary.summary); nl(1);
+        if (aiSummary.highlights.length > 0) {
+          doc.setFontSize(8).setTextColor(60, 60, 60).setFont("helvetica", "bold");
+          doc.text("Highlights:", margin, y); nl();
+          aiSummary.highlights.forEach(h => { body(`• ${h}`); });
+        }
+        if (aiSummary.concerns.length > 0) {
+          nl(1);
+          doc.setFontSize(8).setTextColor(60, 60, 60).setFont("helvetica", "bold");
+          doc.text("Concerns:", margin, y); nl();
+          aiSummary.concerns.forEach(c => { body(`• ${c}`); });
+        }
+        nl(1);
+        doc.setFontSize(8).setTextColor(60, 60, 60).setFont("helvetica", "bold");
+        doc.text("Recommendation:", margin, y); nl();
+        body(aiSummary.recommendation);
+        nl(2);
+      }
+
+      // ── Footer ─────────────────────────────────────────────────────────
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7).setTextColor(160, 160, 160).setFont("helvetica", "normal");
+        doc.text(`Generated by KAI · Page ${i} of ${pageCount}`, margin, 287);
+      }
+
+      doc.save(`KAI_Health_Report_${new Date().toISOString().split("T")[0]}.pdf`);
+    } catch (e: any) {
+      console.error("PDF error:", e);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const generateSummary = async () => {
+    setGenerating(true);
+    setAiError(null);
+    try {
+      const res  = await fetch("/api/health-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ careTasks, medications, appointments, householdTasks }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setAiSummary(data);
+    } catch (e: any) {
+      setAiError(e.message ?? "Could not generate summary");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // ── render ────────────────────────────────────────────────────────────────
 
   return (
     <IPhone13Frame>
-      <div className="flex min-h-full flex-col bg-slate-900 relative text-white font-serif">
+      <div className="flex min-h-full flex-col bg-slate-900 relative text-white font-sans">
+
         {/* Galaxy Background */}
         <div className="absolute inset-0 z-0 pointer-events-none">
-          <Galaxy 
-            density={0.8}
-            glowIntensity={0.4}
-            twinkleIntensity={0.5}
-            speed={0.5}
-          />
+          <Galaxy density={0.8} glowIntensity={0.4} twinkleIntensity={0.5} speed={0.5} />
         </div>
-        
-        {/* Content Overlay */}
-        <div className="relative z-10 flex flex-col flex-1">
-          {/* Header - Only show when report is loaded or loading */}
-          {(profile || loading) && (
-            <div className="bg-slate-900/60 backdrop-blur-lg px-5 pb-4 pt-10 border-b border-slate-800">
-              <div className="mb-1 flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white tracking-wide">KAI Health Report</h1>
-              </div>
-              <p className="text-xs text-gray-400 font-sans">30-day patient summary for clinical review</p>
 
-              <div className="mt-4 flex gap-2">
-                <input
-                  type="tel"
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  placeholder="+60123456789"
-                  className="h-10 flex-1 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-sm font-sans text-white placeholder-gray-500 outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all"
-                  onKeyDown={e => e.key === "Enter" && setPhone(input.trim())}
-                />
-                <button
-                  onClick={() => setPhone(input.trim())}
-                  className="h-10 rounded-xl bg-yellow-400 hover:bg-yellow-500 px-5 text-sm font-sans font-semibold text-gray-900 shadow-sm transition-colors"
-                >
-                  Load
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="relative z-10 flex flex-col flex-1 overflow-y-auto pb-10">
 
-        {loading && (
-          <div className="flex flex-1 items-center justify-center z-10">
-            <div className="text-center">
-              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-yellow-400" />
-              <p className="text-sm font-sans text-gray-400">Loading report…</p>
+          {/* Header */}
+          <div className="bg-slate-900/70 backdrop-blur-lg px-5 pb-5 pt-12 border-b border-slate-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold text-white tracking-wide">Health Report</h1>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {new Date().toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                </p>
+              </div>
+              <button
+                onClick={downloadPDF}
+                disabled={!hasAnyData || downloading}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-bold hover:bg-yellow-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {downloading ? (
+                  <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                )}
+                {downloading ? "Generating…" : "Export PDF"}
+              </button>
             </div>
           </div>
-        )}
 
-        {error && (
-          <div className="m-4 rounded-xl bg-red-50 p-4 text-sm text-red-600">⚠️ {error}</div>
-        )}
+          <div className="flex flex-col gap-4 p-4">
 
-        {!loading && profile && (
-          <div className="flex flex-col gap-4 p-4 pb-8 z-10">
-
-            {/* Daily/Monthly Toggle */}
-            <div className="flex bg-slate-800/80 p-1.5 rounded-xl border border-slate-700 w-full mb-2">
-              <button 
-                onClick={() => setReportPeriod("daily")}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${reportPeriod === "daily" ? "bg-yellow-400 text-slate-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
-              >
-                Daily
-              </button>
-              <button 
-                onClick={() => setReportPeriod("monthly")}
-                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${reportPeriod === "monthly" ? "bg-yellow-400 text-slate-900 shadow-sm" : "text-gray-400 hover:text-white"}`}
-              >
-                Monthly
-              </button>
-            </div>
-
-            {/* Patient profile card */}
-            <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
-              <div className="mb-3 flex items-start justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-white">{profile.patientName ?? "—"}</h2>
-                  <p className="text-sm text-gray-500">
-                    Age {profile.patientAge ?? "—"} · {profile.mainCondition ?? "—"}
-                  </p>
-                </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${scoreColor(avgScore)}`}>
-                  {avgScore}/100
+            {/* Overall Score */}
+            <div className={`rounded-2xl border p-4 flex items-center gap-4 ${scoreBg(overallScore)}`}>
+              <div className="relative h-16 w-16 shrink-0">
+                <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+                  <circle
+                    cx="18" cy="18" r="15.9" fill="none"
+                    stroke={overallScore >= 80 ? "#34d399" : overallScore >= 55 ? "#facc15" : "#f87171"}
+                    strokeWidth="3"
+                    strokeDasharray={`${overallScore}, 100`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${scoreColor(overallScore)}`}>
+                  {hasAnyData ? overallScore : "—"}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                <div className="rounded-lg bg-slate-900/50 p-2">
-                  <p className="font-medium text-gray-400 uppercase tracking-wide mb-0.5">Caregiver</p>
-                  <p className="font-semibold text-white">{profile.caregiverName ?? "—"}</p>
-                </div>
-                <div className="rounded-lg bg-slate-900/50 p-2">
-                  <p className="font-medium text-gray-400 uppercase tracking-wide mb-0.5">Relationship</p>
-                  <p className="font-semibold text-white">{profile.relationship ?? "—"}</p>
-                </div>
-                <div className="col-span-2 rounded-lg bg-slate-900/50 p-2">
-                  <p className="font-medium text-gray-400 uppercase tracking-wide mb-0.5">Current Medications</p>
-                  <p className="font-semibold text-white leading-relaxed">{profile.medications || "None recorded"}</p>
-                </div>
-                {profile.familyName && (
-                  <div className="col-span-2 rounded-lg bg-amber-50 p-2">
-                    <p className="font-medium text-amber-400 uppercase tracking-wide mb-0.5">Emergency Contact</p>
-                    <p className="font-semibold text-amber-800">{profile.familyName} · {profile.familyPhone}</p>
-                  </div>
-                )}
+              <div>
+                <p className="text-xs text-white/40 font-bold uppercase tracking-wider">Overall Care Score</p>
+                <p className={`text-2xl font-bold mt-0.5 ${scoreColor(overallScore)}`}>
+                  {!hasAnyData ? "No data yet" : overallScore >= 80 ? "Good" : overallScore >= 55 ? "Fair" : "Needs Attention"}
+                </p>
+                <p className="text-xs text-white/40 mt-0.5">Based on today's logged activity</p>
               </div>
             </div>
 
-            {/* Summary stats */}
-            <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
-              <h3 className="mb-3 text-sm font-bold text-white">{reportPeriod === "daily" ? "7-Day" : "30-Day"} Summary</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {/* Medication */}
-                <div className="flex flex-col items-center rounded-xl bg-slate-900/50 p-3">
-                  <span className="mb-1 text-xl">💊</span>
-                  <span className={`text-lg font-bold ${medicationCompliance >= 80 ? "text-emerald-600" : medicationCompliance >= 50 ? "text-yellow-500" : "text-red-500"}`}>
-                    {medicationCompliance}%
-                  </span>
-                  <span className="mt-0.5 text-center text-[10px] text-gray-400">Medication</span>
-                </div>
-                {/* Meals */}
-                <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3">
-                  <span className="mb-1 text-xl">🍽️</span>
-                  <span className={`text-lg font-bold ${mealCompliance >= 80 ? "text-emerald-600" : mealCompliance >= 50 ? "text-yellow-500" : "text-red-500"}`}>
-                    {mealCompliance}%
-                  </span>
-                  <span className="mt-0.5 text-center text-[10px] text-gray-400">Meals</span>
-                </div>
-                {/* Concerns */}
-                <div className="flex flex-col items-center rounded-xl bg-gray-50 p-3">
-                  <span className="mb-1 text-xl">⚠️</span>
-                  <span className={`text-lg font-bold ${concernCount === 0 ? "text-emerald-600" : concernCount <= 2 ? "text-yellow-500" : "text-red-500"}`}>
-                    {concernCount}x
-                  </span>
-                  <span className="mt-0.5 text-center text-[10px] text-gray-400">Concerns</span>
-                </div>
-              </div>
-            </div>
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
 
-            {/* Check-in timeline */}
-            {periodCheckins.length > 0 && (
-              <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
-                <h3 className="mb-3 text-sm font-bold text-white">Check-ins</h3>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                  {periodCheckins.map(c => {
-                    const score = careScore(c);
-                    const medOk = c.medication === "YES" || c.medication === "YA";
-                    const mealOk = c.meals === "YES" || c.meals === "YA";
-                    const hasConcern = c.concerns === "YES" || c.concerns === "YA";
-                    return (
-                      <div key={c.date} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
-                        <span className="w-14 shrink-0 text-xs text-gray-400">{formatDate(c.date)}</span>
-                        <div className="flex flex-1 gap-1.5">
-                          <span title="Medication" className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${medOk ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                            {medOk ? "MED ✓" : "MED ✗"}
+              {/* Care Tasks */}
+              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xl">🏥</span>
+                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Patient Care</p>
+                </div>
+                {careTotal > 0 ? (
+                  <>
+                    <p className={`text-2xl font-bold ${scoreColor(Math.round((careCompleted / careTotal) * 100))}`}>
+                      {careCompleted}/{careTotal}
+                    </p>
+                    <p className="text-[11px] text-white/40 mt-0.5">tasks completed</p>
+                    <div className="mt-2 space-y-1">
+                      {careTasks.map(t => (
+                        <div key={t.id} className="flex items-center justify-between text-[11px]">
+                          <span className="text-white/50">{t.icon} {t.name}</span>
+                          <span className={t.logs.length > 0 ? "text-emerald-400 font-bold" : "text-white/20"}>
+                            {t.logs.length > 0 ? `✓ ${t.logs.length}x` : "—"}
                           </span>
-                          <span title="Meals" className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${mealOk ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                            {mealOk ? "MEAL ✓" : "MEAL ✗"}
-                          </span>
-                          {hasConcern && (
-                            <span className="rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-600">⚠️ NOTE</span>
-                          )}
-                          {c.vital && !["skip","langkau"].includes(c.vital.toLowerCase()) && (
-                            <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-600">
-                              {c.vital}
-                            </span>
-                          )}
                         </div>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${scoreColor(score)}`}>
-                          {scoreLabel(score)}
-                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-white/20 italic">No care tasks logged</p>
+                )}
+              </div>
+
+              {/* Medication */}
+              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xl">💊</span>
+                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Medication</p>
+                </div>
+                {medTotal > 0 ? (
+                  <>
+                    <p className={`text-2xl font-bold ${scoreColor(medPct)}`}>{medPct}%</p>
+                    <p className="text-[11px] text-white/40 mt-0.5">{medTaken}/{medTotal} doses taken</p>
+                    <div className="mt-2 space-y-1">
+                      {medications.map(m => (
+                        <div key={m.id} className="flex items-center justify-between text-[11px]">
+                          <span className="text-white/50 truncate pr-1">{m.name}</span>
+                          <span className={m.schedules.every(s => s.taken) ? "text-emerald-400 font-bold" : "text-yellow-400"}>
+                            {m.schedules.filter(s => s.taken).length}/{m.schedules.length}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-white/20 italic">No medications added</p>
+                )}
+              </div>
+
+              {/* Household */}
+              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xl">🏠</span>
+                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Household</p>
+                </div>
+                {houseTotal > 0 ? (
+                  <>
+                    <p className={`text-2xl font-bold ${scoreColor(Math.round((houseCompleted / houseTotal) * 100))}`}>
+                      {houseCompleted}/{houseTotal}
+                    </p>
+                    <p className="text-[11px] text-white/40 mt-0.5">tasks done</p>
+                    <div className="mt-2 space-y-1">
+                      {householdTasks.map(t => (
+                        <div key={t.id} className="flex items-center justify-between text-[11px]">
+                          <span className="text-white/50">{t.icon} {t.name}</span>
+                          <span className={t.logs.length > 0 ? "text-emerald-400 font-bold" : "text-white/20"}>
+                            {t.logs.length > 0 ? "✓" : "—"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-white/20 italic">No tasks logged</p>
+                )}
+              </div>
+
+              {/* Appointments */}
+              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xl">📅</span>
+                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Appointments</p>
+                </div>
+                {upcomingAppts.length > 0 ? (
+                  <div className="space-y-2">
+                    {upcomingAppts.map(a => (
+                      <div key={a.id}>
+                        <p className="text-[11px] font-bold text-white/80 truncate">{a.hospital}</p>
+                        <p className="text-[10px] text-yellow-300/70">{formatDate(a.date)} · {formatTime(a.time)}</p>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Vital readings */}
-            {vitals.length > 0 && (
-              <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
-                <h3 className="mb-3 text-sm font-bold text-white">
-                  Vital Readings
-                  <span className="ml-2 text-xs font-normal text-gray-400 capitalize">
-                    {profile.mainCondition}
-                  </span>
-                </h3>
-                <div className="space-y-2">
-                  {vitals.map(c => (
-                    <div key={c.date} className="flex items-center justify-between rounded-xl bg-blue-50 px-4 py-2.5">
-                      <span className="text-xs text-blue-400">{formatDate(c.date)}</span>
-                      <span className="font-mono text-sm font-bold text-blue-700">{c.vital}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Concern notes */}
-            {concernNotes.length > 0 && (
-              <div className="rounded-2xl bg-slate-800/60 backdrop-blur-md border border-slate-700 p-4 shadow-xl">
-                <h3 className="mb-3 text-sm font-bold text-white">Caregiver Notes</h3>
-                <div className="space-y-2">
-                  {concernNotes.map(c => (
-                    <div key={c.date} className="rounded-xl border border-orange-100 bg-orange-50 p-3">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-orange-400">{formatDate(c.date)}</p>
-                      <p className="text-xs leading-relaxed text-gray-700">{c.concernText}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Doctor summary box */}
-            <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
-              <h3 className="mb-2 text-sm font-bold text-teal-800">For Doctor</h3>
-              <div className="space-y-1 text-xs text-teal-700 leading-relaxed">
-                <p>• Patient: <strong>{profile.patientName}</strong>, {profile.patientAge}y, {profile.mainCondition}</p>
-                <p>• Medications: <strong>{profile.medications || "None"}</strong></p>
-                <p>• {reportPeriod === "daily" ? "7-day" : "30-day"} medication compliance: <strong>{medicationCompliance}%</strong></p>
-                <p>• {reportPeriod === "daily" ? "7-day" : "30-day"} meal compliance: <strong>{mealCompliance}%</strong></p>
-                <p>• Concerns reported: <strong>{concernCount} times</strong> this {reportPeriod === "daily" ? "week" : "month"}</p>
-                <p>• Average care score: <strong>{avgScore}/100</strong></p>
-                {vitals.length > 0 && (
-                  <p>• Latest {profile.mainCondition?.toLowerCase().includes("diabetes") ? "blood sugar" : "blood pressure"}: <strong>{vitals[0].vital}</strong> on {formatDate(vitals[0].date)}</p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-white/20 italic">No upcoming visits</p>
                 )}
               </div>
             </div>
 
-            {/* Print hint */}
-            <p className="text-center text-[10px] text-gray-400">
-              Generated by KAI · {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+            {/* Medication detail */}
+            {medications.some(m => m.schedules.some(s => !s.taken)) && (
+              <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+                <p className="text-xs text-yellow-300/70 font-bold uppercase tracking-wider mb-3">Pending Doses</p>
+                <div className="space-y-2">
+                  {medications.flatMap(m =>
+                    m.schedules
+                      .filter(s => !s.taken)
+                      .map(s => (
+                        <div key={s.id} className="flex justify-between items-center text-[12px]">
+                          <span className="text-white/70">{m.name} <span className="text-white/30">{m.dosage}</span></span>
+                          <span className="text-yellow-300/70 font-medium">{s.period} · {s.time}</span>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* AI Health Summary */}
+            <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-white/50 font-bold uppercase tracking-wider">AI Health Summary</p>
+                <span className="text-[10px] text-white/20">Gemini 2.5</span>
+              </div>
+
+              {!aiSummary && !generating && (
+                <button
+                  onClick={generateSummary}
+                  disabled={!hasAnyData}
+                  className="w-full py-3 rounded-xl border border-yellow-400/30 bg-yellow-400/10 text-yellow-300 text-sm font-bold hover:bg-yellow-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Generate Report Summary
+                </button>
+              )}
+
+              {generating && (
+                <div className="flex items-center gap-2 py-3">
+                  <svg className="animate-spin shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  <span className="text-sm text-white/50">Analysing health data...</span>
+                </div>
+              )}
+
+              {aiError && <p className="text-xs text-red-400">{aiError}</p>}
+
+              {aiSummary && (
+                <div className="space-y-3">
+                  {/* Status badge */}
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold ${scoreBg(aiSummary.score)}`}>
+                    <span className={scoreColor(aiSummary.score)}>●</span>
+                    <span className={scoreColor(aiSummary.score)}>{aiSummary.overallStatus}</span>
+                    <span className="text-white/30">· {aiSummary.score}/100</span>
+                  </div>
+
+                  <p className="text-sm text-white/70 leading-relaxed">{aiSummary.summary}</p>
+
+                  {aiSummary.highlights.length > 0 && (
+                    <div className="space-y-1">
+                      {aiSummary.highlights.map((h, i) => (
+                        <div key={i} className="flex items-start gap-2 text-[12px] text-emerald-400">
+                          <span className="mt-0.5 shrink-0">✓</span><span>{h}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {aiSummary.concerns.length > 0 && (
+                    <div className="space-y-1">
+                      {aiSummary.concerns.map((c, i) => (
+                        <div key={i} className="flex items-start gap-2 text-[12px] text-yellow-400">
+                          <span className="mt-0.5 shrink-0">⚠</span><span>{c}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
+                    <p className="text-[10px] text-blue-400/70 font-bold uppercase tracking-wider mb-1">Recommendation</p>
+                    <p className="text-[12px] text-white/60 leading-relaxed">{aiSummary.recommendation}</p>
+                  </div>
+
+                  <button
+                    onClick={generateSummary}
+                    className="text-[11px] text-white/30 hover:text-white/60 transition-colors"
+                  >
+                    Regenerate
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {!hasAnyData && (
+              <div className="text-center py-6">
+                <p className="text-4xl mb-3">📋</p>
+                <p className="text-sm text-white/40">No activity logged yet.</p>
+                <p className="text-xs text-white/25 mt-1">Use Patient Caring, Medication, or Household pages to start tracking.</p>
+              </div>
+            )}
+
+            <p className="text-center text-[10px] text-slate-600">
+              KAI · {new Date().toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}
             </p>
           </div>
-        )}
-
-        {!loading && !profile && !error && (
-          <div className="flex flex-1 flex-col items-center justify-center px-6 text-center z-10">
-            <div className="mb-4 flex flex-row items-center justify-center gap-4">
-              <img src="/report-icon.png" alt="Report Icon" className="h-14 w-auto object-contain drop-shadow-md" />
-              <h2 className="text-3xl font-bold text-white tracking-wide">Patient Report</h2>
-            </div>
-            <p className="mb-8 text-sm font-sans text-gray-400 leading-relaxed">Enter the caregiver's WhatsApp number to load their 30-day health report.</p>
-            
-            <div className="flex w-full max-w-sm flex-col gap-4">
-              <input
-                type="tel"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder="+60123456789"
-                className="h-14 w-full rounded-xl border border-slate-700 bg-slate-800/80 px-4 text-center text-lg font-sans text-white placeholder-gray-500 outline-none focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 transition-all"
-                onKeyDown={e => e.key === "Enter" && setPhone(input.trim())}
-              />
-              <button
-                onClick={() => setPhone(input.trim())}
-                className="h-14 w-full rounded-xl bg-yellow-400 hover:bg-yellow-500 px-5 text-base font-sans font-semibold text-gray-900 shadow-sm transition-colors"
-              >
-                Load Report
-              </button>
-            </div>
-          </div>
-        )}
         </div>
       </div>
     </IPhone13Frame>

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@/whatsapp/genkit";
 
 export interface HealthSummaryResult {
   overallStatus: "Good" | "Fair" | "Needs Attention";
@@ -12,8 +11,10 @@ export interface HealthSummaryResult {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { careTasks, medications, appointments, householdTasks } = body;
+    const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set in environment variables.");
+
+    const { careTasks, medications, appointments, householdTasks } = await req.json();
 
     const prompt = `You are a home-care health analyst. Based on the following activity data logged by a caregiver app, generate a concise health status report.
 
@@ -31,7 +32,7 @@ ${JSON.stringify(householdTasks ?? [], null, 2)}
 
 Return ONLY valid JSON with no markdown:
 {
-  "overallStatus": "Good" | "Fair" | "Needs Attention",
+  "overallStatus": "Good",
   "score": 85,
   "summary": "2-3 sentence plain-language summary of the patient's overall care status today",
   "highlights": ["Positive finding 1", "Positive finding 2"],
@@ -40,19 +41,34 @@ Return ONLY valid JSON with no markdown:
 }
 
 Rules:
+- overallStatus must be exactly one of: "Good", "Fair", "Needs Attention"
 - score is 0-100
 - highlights and concerns are short bullet strings (max 3 each)
 - If no concerns, return empty array
 - Be encouraging but honest`;
 
-    const response = await ai.generate({
-      model: "googleai/gemini-2.5-flash",
-      prompt: [{ text: prompt }],
-    });
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" },
+        }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
 
-    const raw = response.text?.trim() ?? "";
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Gemini API error ${res.status}: ${body.substring(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
     const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-    const result = JSON.parse(jsonStr) as HealthSummaryResult;
+    const result  = JSON.parse(jsonStr) as HealthSummaryResult;
 
     return NextResponse.json(result);
   } catch (err: any) {
