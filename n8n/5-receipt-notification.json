@@ -1,0 +1,48 @@
+{
+  "name": "KAI — 5. Receipt Scanned → Family Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path":       "kai-receipt-scanned",
+        "options":    {}
+      },
+      "id": "webhook-receipt",
+      "name": "Receipt Scanned Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "kai-receipt-scanned"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\n// d = { type: 'grocery'|'medical', store/hospital, total, currency, items[], claimNote }\n\nconst isGrocery = d.type === 'grocery';\nconst place = isGrocery ? d.store : d.hospital;\nconst emoji = isGrocery ? '🛒' : '🏥';\nconst topItems = (d.items ?? []).slice(0, 3).map(i => i.name || i.description || 'Item').join(', ');\n\nconst message = [\n  `${emoji} New expense logged!`,\n  ``,\n  `📍 ${place}`,\n  `💰 ${d.currency ?? 'MYR'} ${Number(d.total).toFixed(2)}`,\n  topItems ? `📦 Includes: ${topItems}${d.items?.length > 3 ? ` +${d.items.length - 3} more` : ''}` : null,\n  ``,\n  d.claimNote ? `💡 ${d.claimNote}` : null,\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { message } }];"
+      },
+      "id": "format-receipt-msg",
+      "name": "Format Receipt Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
+        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
+        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+        "to":         "whatsapp:={{ $env.FAMILY_PHONE }}",
+        "message":    "={{ $json.message }}"
+      },
+      "id": "notify-family-receipt",
+      "name": "Notify Family",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Receipt Scanned Webhook":  { "main": [[{ "node": "Format Receipt Message", "type": "main", "index": 0 }]] },
+    "Format Receipt Message":   { "main": [[{ "node": "Notify Family",          "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}

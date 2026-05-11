@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import IPhone13Frame from "@/components/iPhone13Frame";
 import Galaxy from "./Galaxy";
 import { load, KEYS } from "@/app/lib/store";
@@ -47,6 +48,8 @@ function formatTime(t: string) {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function ReportPage() {
+  const router = useRouter();
+
   const [careTasks,      setCareTasks]      = useState<CareTask[]>([]);
   const [medications,    setMedications]    = useState<Medication[]>([]);
   const [appointments,   setAppointments]   = useState<Appointment[]>([]);
@@ -191,7 +194,7 @@ export default function ReportPage() {
 
       // ── AI Summary ─────────────────────────────────────────────────────
       if (aiSummary) {
-        section("AI Health Summary");
+        section("Care Summary");
         row("Status", aiSummary.overallStatus);
         row("Score",  `${aiSummary.score}/100`);
         nl(1);
@@ -201,15 +204,21 @@ export default function ReportPage() {
           doc.text("Highlights:", margin, y); nl();
           aiSummary.highlights.forEach(h => { body(`• ${h}`); });
         }
-        if (aiSummary.concerns.length > 0) {
+        if (aiSummary.meals?.length > 0) {
           nl(1);
           doc.setFontSize(8).setTextColor(60, 60, 60).setFont("helvetica", "bold");
-          doc.text("Concerns:", margin, y); nl();
-          aiSummary.concerns.forEach(c => { body(`• ${c}`); });
+          doc.text("Suggested Meals:", margin, y); nl();
+          aiSummary.meals.forEach(m => {
+            body(`• ${m.name} — ${m.description}`);
+            doc.setFontSize(7.5).setTextColor(100, 100, 100).setFont("helvetica", "italic");
+            const lines = doc.splitTextToSize(`  ${m.why}`, colW) as string[];
+            doc.text(lines, margin, y);
+            y += lines.length * 4.5;
+          });
         }
         nl(1);
         doc.setFontSize(8).setTextColor(60, 60, 60).setFont("helvetica", "bold");
-        doc.text("Recommendation:", margin, y); nl();
+        doc.text("Today's Tip:", margin, y); nl();
         body(aiSummary.recommendation);
         nl(2);
       }
@@ -264,8 +273,14 @@ export default function ReportPage() {
 
           {/* Header */}
           <div className="bg-slate-900/70 backdrop-blur-lg px-5 pb-5 pt-12 border-b border-slate-800">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push("/home")}
+                className="h-9 w-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0 hover:bg-white/10 transition-colors"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <div className="flex-1 min-w-0">
                 <h1 className="text-xl font-bold text-white tracking-wide">Health Report</h1>
                 <p className="text-xs text-slate-400 mt-0.5">
                   {new Date().toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
@@ -274,7 +289,7 @@ export default function ReportPage() {
               <button
                 onClick={downloadPDF}
                 disabled={!hasAnyData || downloading}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-bold hover:bg-yellow-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-bold hover:bg-yellow-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
               >
                 {downloading ? (
                   <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
@@ -486,20 +501,43 @@ export default function ReportPage() {
                     </div>
                   )}
 
-                  {aiSummary.concerns.length > 0 && (
-                    <div className="space-y-1">
-                      {aiSummary.concerns.map((c, i) => (
-                        <div key={i} className="flex items-start gap-2 text-[12px] text-yellow-400">
-                          <span className="mt-0.5 shrink-0">⚠</span><span>{c}</span>
+                  {/* Meal Recommendations */}
+                  {aiSummary.meals?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-2.5">Suggested Meals Today</p>
+                      <div className="-mx-4 px-4">
+                        <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+                          {aiSummary.meals.map((meal, i) => (
+                            <div key={i} className="flex-none w-[185px] rounded-xl overflow-hidden border border-white/10 bg-slate-800/80">
+                              <div className="h-[110px] w-full overflow-hidden bg-slate-700/50">
+                                <img
+                                  src={meal.imageUrl}
+                                  alt={meal.name}
+                                  className="h-full w-full object-cover"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                />
+                              </div>
+                              <div className="p-3">
+                                <p className="text-[13px] font-bold text-white leading-snug">{meal.name}</p>
+                                <p className="text-[10px] text-white/40 mt-1 leading-relaxed line-clamp-2">{meal.description}</p>
+                                <div className="mt-2 pt-2 border-t border-white/[0.07]">
+                                  <p className="text-[10px] text-emerald-400/80 leading-relaxed">{meal.why}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
                     </div>
                   )}
 
-                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
-                    <p className="text-[10px] text-blue-400/70 font-bold uppercase tracking-wider mb-1">Recommendation</p>
-                    <p className="text-[12px] text-white/60 leading-relaxed">{aiSummary.recommendation}</p>
-                  </div>
+                  {/* General tip */}
+                  {aiSummary.recommendation && (
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+                      <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">Today's Tip</p>
+                      <p className="text-[12px] text-white/55 leading-relaxed">{aiSummary.recommendation}</p>
+                    </div>
+                  )}
 
                   <button
                     onClick={generateSummary}

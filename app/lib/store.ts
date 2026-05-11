@@ -9,7 +9,15 @@ export const KEYS = {
 } as const;
 
 export function save<T>(key: string, value: T): void {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    // Push to Firestore so n8n and MCP servers have live data
+    fetch("/api/push-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    }).catch(() => {});
+  } catch {}
 }
 
 export function load<T>(key: string, fallback: T): T {

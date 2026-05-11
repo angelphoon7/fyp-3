@@ -1,0 +1,77 @@
+{
+  "name": "KAI — 2. Appointment → Google Calendar + Family Notify",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path":       "kai-new-appointment",
+        "options":    {}
+      },
+      "id": "webhook-appt",
+      "name": "New Appointment Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "kai-new-appointment"
+    },
+    {
+      "parameters": {
+        "calendar":    { "value": "primary", "mode": "list" },
+        "title":       "=🏥 {{ $json.hospital }}",
+        "start":       "={{ $json.date }}T{{ $json.time }}:00",
+        "end":         "={{ $json.date }}T{{ $json.time }}:00",
+        "timeZone":    "Asia/Kuala_Lumpur",
+        "description": "=Patient appointment\nHospital: {{ $json.hospital }}\nNotes: {{ $json.notes ?? 'None' }}\n\nAdded by KAI",
+        "additionalFields": {
+          "reminders": {
+            "values": [
+              { "method": "popup",  "minutes": 1440 },
+              { "method": "popup",  "minutes": 120  },
+              { "method": "email",  "minutes": 1440 }
+            ]
+          }
+        }
+      },
+      "id": "create-calendar",
+      "name": "Create Google Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.1,
+      "position": [460, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('New Appointment Webhook').first().json;\nconst date = new Date(`${d.date}T${d.time}`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' });\nconst time = new Date(`${d.date}T${d.time}`).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });\n\nconst message = [\n  `📅 New appointment added to the calendar!`,\n  ``,\n  `🏥 ${d.hospital}`,\n  `🗓️ ${date} at ${time}`,\n  d.notes ? `📝 ${d.notes}` : null,\n  ``,\n  `A reminder will be sent the day before and 2 hours before.\nNo need to set anything — KAI's got it.`\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { message } }];"
+      },
+      "id": "format-appt-msg",
+      "name": "Format Appointment Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 380]
+    },
+    {
+      "parameters": {
+        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
+        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
+        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+        "to":         "whatsapp:={{ $env.FAMILY_PHONE }}",
+        "message":    "={{ $json.message }}"
+      },
+      "id": "notify-family-appt",
+      "name": "Notify Family",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [700, 380]
+    }
+  ],
+  "connections": {
+    "New Appointment Webhook": {
+      "main": [[
+        { "node": "Create Google Calendar Event", "type": "main", "index": 0 },
+        { "node": "Format Appointment Message",   "type": "main", "index": 0 }
+      ]]
+    },
+    "Format Appointment Message": { "main": [[{ "node": "Notify Family", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}

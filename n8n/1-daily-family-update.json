@@ -1,0 +1,60 @@
+{
+  "name": "KAI — 1. Daily Family Update",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 20 * * *" }]
+        }
+      },
+      "id": "trigger-daily",
+      "name": "Every Day 8PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.KAI_APP_URL }}/api/daily-summary",
+        "options": {}
+      },
+      "id": "fetch-summary",
+      "name": "Get Daily Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst pending = (d.medication?.pending ?? []).map(m => m.name).join(', ');\nconst nextAppt = d.appointments?.upcoming?.[0];\n\nconst message = [\n  `Hi! Here's today's update for your loved one 🌟`,\n  ``,\n  `✅ Care tasks: ${d.care.completed}/${d.care.total} done`,\n  `💊 Medications: ${d.medication.taken}/${d.medication.total} taken${pending ? ` (${pending} still pending)` : ''}`,\n  `🏠 Household: ${d.household.completed}/${d.household.total} tasks done`,\n  nextAppt ? `📅 Next appointment: ${nextAppt.hospital} on ${nextAppt.date} at ${nextAppt.time}` : `📅 No upcoming appointments`,\n  ``,\n  `Overall today: ${d.score}/100`,\n  ``,\n  `— Sent automatically by KAI`\n].join('\\n');\n\nreturn [{ json: { message } }];"
+      },
+      "id": "format-message",
+      "name": "Format Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
+        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
+        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+        "to":         "whatsapp:={{ $env.FAMILY_PHONE }}",
+        "message":    "={{ $json.message }}"
+      },
+      "id": "send-whatsapp",
+      "name": "Send to Family",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Every Day 8PM":    { "main": [[{ "node": "Get Daily Summary", "type": "main", "index": 0 }]] },
+    "Get Daily Summary":{ "main": [[{ "node": "Format Message",    "type": "main", "index": 0 }]] },
+    "Format Message":   { "main": [[{ "node": "Send to Family",    "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}

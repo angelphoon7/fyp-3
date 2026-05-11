@@ -86,11 +86,6 @@ export default function HouseholdManagementPage() {
   };
 
   // --- gallery upload ---
-  const openGallery = () => {
-    closePicker();
-    fileInputRef.current?.click();
-  };
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -125,6 +120,17 @@ export default function HouseholdManagementPage() {
     if (taskId === "groceries" && imageUrl) analyzeReceipt(imageUrl);
   };
 
+  const fireReceiptWebhook = (receiptData: object) => {
+    const n8nUrl = process.env.NEXT_PUBLIC_N8N_URL;
+    if (n8nUrl) {
+      fetch(`${n8nUrl}/webhook/kai-receipt-scanned`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "grocery", ...receiptData }),
+      }).catch(() => {});
+    }
+  };
+
   const analyzeReceipt = async (imageUrl: string) => {
     try {
       const res  = await fetch("/api/analyze-receipt", {
@@ -134,10 +140,17 @@ export default function HouseholdManagementPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
-      setTasks(prev => prev.map(t => {
-        if (t.id !== "groceries") return t;
-        return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, receipt: data, analyzing: false } : log) };
-      }));
+      setTasks(prev => {
+        const updated = prev.map(t => {
+          if (t.id !== "groceries") return t;
+          return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, receipt: data, analyzing: false } : log) };
+        });
+        save(KEYS.householdTasks, updated);
+        return updated;
+      });
+      // Trigger n8n workflow 5 — receipt scanned → family notification
+      fireReceiptWebhook({ store: data.store, total: data.total, currency: data.currency, items: data.items, claimNote: data.claimSummary });
+      router.push("/financial");
     } catch {
       setTasks(prev => prev.map(t => {
         if (t.id !== "groceries") return t;

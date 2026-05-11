@@ -1,0 +1,97 @@
+{
+  "name": "KAI — 3. Monthly Financial Claim Email",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 9 28-31 * *" }]
+        }
+      },
+      "id": "trigger-monthly",
+      "name": "Last Days of Month 9AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Only run on the actual last day of the month\nconst now = new Date();\nconst tomorrow = new Date(now);\ntomorrow.setDate(tomorrow.getDate() + 1);\nconst isLastDay = tomorrow.getMonth() !== now.getMonth();\nreturn [{ json: { isLastDay, date: now.toISOString() } }];"
+      },
+      "id": "check-last-day",
+      "name": "Check Last Day of Month",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.isLastDay }}", "value2": true }]
+        }
+      },
+      "id": "if-last-day",
+      "name": "Is Last Day?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url":    "={{ $env.KAI_APP_URL }}/api/financial-export",
+        "options": {}
+      },
+      "id": "fetch-financials",
+      "name": "Get Financial Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst month = new Date().toLocaleDateString('en-MY', { month: 'long', year: 'numeric' });\n\nconst groceryRows = (d.groceryReceipts ?? []).map(r =>\n  `<tr><td>${r.store}</td><td>${r.date}</td><td style='text-align:right'>RM ${r.total.toFixed(2)}</td></tr>`\n).join('');\n\nconst medicalRows = (d.medicalReceipts ?? []).map(r =>\n  `<tr><td>${r.hospital}</td><td>${r.date}</td><td style='text-align:right'>RM ${r.total.toFixed(2)}</td></tr>`\n).join('');\n\nconst html = `\n<html><body style='font-family:Arial,sans-serif;color:#222;max-width:600px;margin:auto'>\n<h2 style='color:#059669'>KAI Monthly Care Expense Report</h2>\n<p style='color:#666'>${month}</p>\n\n<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:16px 0'>\n  <strong>Total Spending: RM ${d.grandTotal.toFixed(2)}</strong><br/>\n  Groceries: RM ${d.groceryTotal.toFixed(2)} &nbsp;|&nbsp; Medical: RM ${d.medicalTotal.toFixed(2)}\n</div>\n\n${groceryRows ? `<h3>🛒 Grocery Expenses</h3>\n<table width='100%' style='border-collapse:collapse'>\n<tr style='background:#f3f4f6'><th style='padding:8px;text-align:left'>Store</th><th>Date</th><th>Amount</th></tr>\n${groceryRows}\n</table>` : ''}\n\n${medicalRows ? `<h3>🏥 Medical Expenses</h3>\n<table width='100%' style='border-collapse:collapse'>\n<tr style='background:#f3f4f6'><th style='padding:8px;text-align:left'>Hospital</th><th>Date</th><th>Amount</th></tr>\n${medicalRows}\n</table>` : ''}\n\n<p style='color:#999;font-size:12px;margin-top:24px'>Generated automatically by KAI &middot; ${new Date().toLocaleDateString('en-MY')}</p>\n</body></html>`;\n\nconst subject = `KAI Care Expenses — ${month} — RM ${d.grandTotal.toFixed(2)}`;\nreturn [{ json: { html, subject, grandTotal: d.grandTotal } }];"
+      },
+      "id": "build-email",
+      "name": "Build Email HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "sendTo":   "={{ $env.FAMILY_EMAIL }}",
+        "subject":  "={{ $json.subject }}",
+        "message":  "={{ $json.html }}",
+        "options": { "appendAttribution": false }
+      },
+      "id": "send-email",
+      "name": "Send Claim Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1340, 220]
+    },
+    {
+      "parameters": {
+        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
+        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
+        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+        "to":         "whatsapp:={{ $env.FAMILY_PHONE }}",
+        "message":    "=✅ Monthly expense report sent!\n\nTotal this month: RM {{ $('Build Email HTML').first().json.grandTotal.toFixed(2) }}\n\nCheck your email for the full breakdown. All receipts are included — ready to claim. 🧾"
+      },
+      "id": "confirm-whatsapp",
+      "name": "WhatsApp Confirmation",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [1340, 360]
+    }
+  ],
+  "connections": {
+    "Last Days of Month 9AM": { "main": [[{ "node": "Check Last Day of Month", "type": "main", "index": 0 }]] },
+    "Check Last Day of Month":{ "main": [[{ "node": "Is Last Day?",            "type": "main", "index": 0 }]] },
+    "Is Last Day?":           { "main": [[{ "node": "Get Financial Data",       "type": "main", "index": 0 }]], "main_1": [] },
+    "Get Financial Data":     { "main": [[{ "node": "Build Email HTML",         "type": "main", "index": 0 }]] },
+    "Build Email HTML":       { "main": [[{ "node": "Send Claim Email",         "type": "main", "index": 0 }, { "node": "WhatsApp Confirmation", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}

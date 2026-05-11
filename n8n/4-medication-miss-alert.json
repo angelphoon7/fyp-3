@@ -1,0 +1,84 @@
+{
+  "name": "KAI — 4. Medication Miss Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 10,13,16,19 * * *" }]
+        }
+      },
+      "id": "trigger-med",
+      "name": "Check 4x Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url":    "={{ $env.KAI_APP_URL }}/api/daily-summary",
+        "options": {}
+      },
+      "id": "fetch-med-summary",
+      "name": "Get Medication Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst pending = d.medication?.pending ?? [];\n\n// Only alert if there are overdue medications based on current hour\nconst hour = new Date().getHours();\nconst overdue = pending.filter(m => {\n  const [h] = (m.time ?? '00:00').split(':').map(Number);\n  return h < hour; // scheduled before now but not taken\n});\n\nreturn [{ json: { overdue, count: overdue.length, hasOverdue: overdue.length > 0 } }];"
+      },
+      "id": "check-overdue",
+      "name": "Check Overdue Medications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.hasOverdue }}", "value2": true }]
+        }
+      },
+      "id": "if-overdue",
+      "name": "Any Overdue?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { overdue } = $input.first().json;\nconst names = overdue.map(m => `${m.name} ${m.dosage} (was due ${m.time})`).join('\\n• ');\nconst message = `⏰ Medication check-in!\\n\\nThese haven't been marked as taken yet:\\n• ${names}\\n\\nIf they've already been given, just log it in the app when you get a moment. No stress! 💙`;\nreturn [{ json: { message } }];"
+      },
+      "id": "format-med-msg",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
+        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
+        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
+        "to":         "whatsapp:={{ $env.CAREGIVER_PHONE }}",
+        "message":    "={{ $json.message }}"
+      },
+      "id": "alert-caregiver",
+      "name": "Nudge Caregiver",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [1340, 220]
+    }
+  ],
+  "connections": {
+    "Check 4x Daily":           { "main": [[{ "node": "Get Medication Status",       "type": "main", "index": 0 }]] },
+    "Get Medication Status":     { "main": [[{ "node": "Check Overdue Medications",   "type": "main", "index": 0 }]] },
+    "Check Overdue Medications": { "main": [[{ "node": "Any Overdue?",               "type": "main", "index": 0 }]] },
+    "Any Overdue?":              { "main": [[{ "node": "Format Alert",               "type": "main", "index": 0 }]], "main_1": [] },
+    "Format Alert":              { "main": [[{ "node": "Nudge Caregiver",            "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}

@@ -48,15 +48,20 @@ export default function AppointmentPage() {
 
   const addAppointment = () => {
     if (!newHospital.trim() || !newDate) return;
-    setAppointments(prev => [...prev, {
-      id: uid(),
-      hospital: newHospital.trim(),
-      date: newDate,
-      time: newTime,
-      notes: newNotes.trim(),
-    }]);
+    const newAppt = { id: uid(), hospital: newHospital.trim(), date: newDate, time: newTime, notes: newNotes.trim() };
+    setAppointments(prev => [...prev, newAppt]);
     setNewHospital(""); setNewDate(""); setNewTime("09:00"); setNewNotes("");
     setAddOpen(false);
+
+    // Trigger n8n workflow 2 — appointment → Google Calendar + family notify
+    const n8nUrl = process.env.NEXT_PUBLIC_N8N_URL;
+    if (n8nUrl) {
+      fetch(`${n8nUrl}/webhook/kai-new-appointment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newAppt),
+      }).catch(() => {});
+    }
   };
 
   const deleteAppointment = (id: string) => {
@@ -135,6 +140,17 @@ export default function AppointmentPage() {
     analyzeReport(apptId, imageUrl);
   };
 
+  const fireReceiptWebhook = (receiptData: object) => {
+    const n8nUrl = process.env.NEXT_PUBLIC_N8N_URL;
+    if (n8nUrl) {
+      fetch(`${n8nUrl}/webhook/kai-receipt-scanned`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "medical", ...receiptData }),
+      }).catch(() => {});
+    }
+  };
+
   const analyzeReport = async (apptId: string, imageUrl: string) => {
     try {
       const res  = await fetch("/api/analyze-medical-report", {
@@ -147,6 +163,8 @@ export default function AppointmentPage() {
       setAppointments(prev => prev.map(a =>
         a.id !== apptId ? a : { ...a, doc: { image: imageUrl, report: data, analyzing: false } }
       ));
+      // Trigger n8n workflow 5 — receipt scanned → family notification
+      fireReceiptWebhook({ hospital: data.hospital, total: data.total, currency: data.currency, items: data.items, claimNote: data.claimSummary });
     } catch {
       setAppointments(prev => prev.map(a =>
         a.id !== apptId ? a : { ...a, doc: { ...a.doc!, analyzing: false } }
