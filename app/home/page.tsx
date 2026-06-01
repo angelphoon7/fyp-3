@@ -117,12 +117,23 @@ export default function HomeDashboard() {
         {/* Main Content Area */}
         <div className="relative z-10 h-full w-full pb-24 overflow-y-auto scrollbar-hide">
           
-          {/* Header */}
-          <header className="flex items-center justify-between px-6 pt-14 pb-4">
-            <div className="animate-in fade-in slide-in-from-left-4 duration-700">
-              <p className="text-white/50 text-sm font-medium tracking-wide uppercase">Good Morning</p>
-              <h1 className="text-2xl font-bold tracking-tight mt-0.5 text-white">
-                Angel <span className="text-yellow-400">✨</span>
+          {/* Header Banner — iOS fluid glass */}
+          <div className="relative mx-4 mt-12 mb-1 rounded-[22px]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(180,180,180,0.13) 0%, rgba(120,120,120,0.08) 100%)',
+              backdropFilter: 'blur(40px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+              border: '1px solid rgba(255,255,255,0.18)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -1px 1px rgba(0,0,0,0.15)'
+            }}
+          >
+            {/* inner highlight strip at top */}
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+          <header className="relative flex items-center justify-between px-5 py-4">
+            <div>
+              <p className="text-white/40 text-[9px] font-semibold tracking-[0.22em] uppercase mb-0.5">Overview</p>
+              <h1 className="text-[20px] font-bold tracking-tight text-white">
+                Home Dashboard
               </h1>
             </div>
             <div className="relative">
@@ -138,84 +149,12 @@ export default function HomeDashboard() {
                 </div>
               </button>
 
-              {/* Profile Dropdown */}
-              {isProfileOpen && (
-                <>
-                  {/* Backdrop to close when clicking outside */}
-                  <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
-                  
-                  <div className="absolute right-0 top-14 w-64 z-50 rounded-3xl border border-white/30 bg-black/40 p-4 backdrop-blur-[40px] backdrop-saturate-200 shadow-[0_24px_60px_rgba(0,0,0,0.6),inset_0_1px_2px_rgba(255,255,255,0.4)] animate-in slide-in-from-top-4 fade-in duration-300">
-                    <div className="flex items-center gap-3 border-b border-white/10 pb-4 mb-2">
-                      <div className="h-10 w-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                        <span className="text-xl">✨</span>
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-white drop-shadow-md">Angel</p>
-                        <p className="text-xs text-white/50">Primary Caregiver</p>
-                      </div>
-                    </div>
-                    
-                    {/* Shift Requests Summary Section */}
-                    <div className="mb-2 pb-2 border-b border-white/10">
-                      <button 
-                        onClick={() => {
-                          setIsProfileOpen(false);
-                          setIsShiftRequestsModalOpen(true);
-                        }}
-                        className="w-full flex flex-col gap-1.5 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors"
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-2">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-400">
-                              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                            </svg>
-                            <span className="text-sm font-bold text-white">Shift Requests</span>
-                          </div>
-                          <span className="bg-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                            {shiftRequests.length} Active
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-white/60">
-                          <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-                            {shiftRequests.filter(r => r.status === "responses").length} Replies
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
-                            {shiftRequests.filter(r => r.status === "pending").length} Pending
-                          </span>
-                        </div>
-                      </button>
-                    </div>
-                    <div className="space-y-1">
-                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors text-white/80 hover:text-white">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></svg>
-                        <span className="text-sm font-medium">Account Details</span>
-                      </button>
-                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors text-white/80 hover:text-white">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-                        <span className="text-sm font-medium">Edit Patient Info</span>
-                      </button>
-                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/10 transition-colors text-white/80 hover:text-white">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>
-                        <span className="text-sm font-medium">Settings</span>
-                      </button>
-                      <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/20 transition-colors text-red-400 hover:text-red-300 mt-2">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-                        <span className="text-sm font-medium">Log Out</span>
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           </header>
-
-
+          </div>
 
           {/* Quick Access Categories */}
           <div className="px-6 py-5 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
-            <h2 className="text-lg font-semibold text-white/90 mb-4">Home Dashboard</h2>
             
             <div className="grid grid-cols-2 gap-4">
               {/* Box 1: Patient Caring */}
@@ -281,6 +220,32 @@ export default function HomeDashboard() {
 
 
         </div>
+
+        {/* Profile Dropdown */}
+        {isProfileOpen && (
+          <>
+            <div className="absolute inset-0 z-50" onClick={() => setIsProfileOpen(false)} />
+            <div className="absolute right-3 top-32 w-44 z-[60] rounded-xl overflow-hidden border border-white/15 backdrop-blur-2xl animate-in slide-in-from-top-1 fade-in duration-150" style={{ background: 'rgba(28,28,28,0.72)' }}>
+              <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
+                <div className="h-6 w-6 rounded-full bg-yellow-500/20 flex items-center justify-center text-xs shrink-0">✨</div>
+                <div>
+                  <p className="text-[11px] font-semibold text-white leading-none">Angel</p>
+                  <p className="text-[9px] text-white/40 mt-0.5">Primary Caregiver</p>
+                </div>
+              </div>
+              <button onClick={() => { setIsProfileOpen(false); setIsShiftRequestsModalOpen(true); }} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-white/8 transition-colors">
+                <span className="text-[11px] text-white/75">Shift Requests</span>
+                <span className="text-[9px] font-bold bg-yellow-400 text-black px-1.5 py-0.5 rounded">{shiftRequests.length}</span>
+              </button>
+              <div className="h-px bg-white/10 mx-2" />
+              {["Account Details", "Edit Patient Info", "Settings"].map(label => (
+                <button key={label} className="w-full text-left px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/8 hover:text-white transition-colors">{label}</button>
+              ))}
+              <div className="h-px bg-white/10 mx-2" />
+              <button className="w-full text-left px-3 py-1.5 text-[11px] text-red-400/75 hover:bg-red-500/10 transition-colors">Log Out</button>
+            </div>
+          </>
+        )}
 
         {/* Floating Bottom Navigation Bar */}
         <div className="absolute bottom-0 inset-x-0 w-full z-40 pointer-events-none">
