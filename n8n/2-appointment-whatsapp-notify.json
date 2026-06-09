@@ -4,8 +4,8 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path":       "kai-new-appointment",
-        "options":    {}
+        "path": "kai-new-appointment",
+        "options": {}
       },
       "id": "webhook-appt",
       "name": "New Appointment Webhook",
@@ -26,15 +26,25 @@
     },
     {
       "parameters": {
-        "operation": "send",
-        "from":    "whatsapp:+14155238886",
-        "to":      "={{ $('New Appointment Webhook').first().json.to }}",
-        "message": "={{ $json.message }}"
+        "method": "POST",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/REMOVED_TWILIO_SID/Messages.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "From", "value": "whatsapp:+14155238886" },
+            { "name": "To", "value": "=whatsapp:{{ $json.to }}" },
+            { "name": "Body", "value": "={{ $json.message }}" }
+          ]
+        },
+        "options": {}
       },
-      "id": "notify-family-appt",
+      "id": "send-whatsapp-http",
       "name": "Send WhatsApp to Family",
-      "type": "n8n-nodes-base.twilio",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [680, 300]
     }
   ],
