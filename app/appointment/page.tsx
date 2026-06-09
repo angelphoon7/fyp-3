@@ -5,7 +5,14 @@ import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "@/app/patient_caring/ReflectiveCard";
 import type { MedicalReportResult } from "@/app/api/analyze-medical-report/route";
-import { save, KEYS } from "@/app/lib/store";
+import { save, load, hydrate, KEYS } from "@/app/lib/store";
+
+type Contact = {
+  id: string;
+  name: string;
+  phone: string;
+  relation: string;
+};
 
 type AppointmentDoc = {
   image: string;
@@ -29,7 +36,8 @@ function uid() {
 export default function AppointmentPage() {
   const router = useRouter();
 
-  const [appointments, setAppointments] = useState<Appointment[]>([
+  const [hydrated, setHydrated] = useState(false);
+  const [appointments, setAppointments] = useState<Appointment[]>(() => load(KEYS.appointments, [
     {
       id: uid(),
       hospital: "Hospital Kuala Lumpur",
@@ -37,14 +45,46 @@ export default function AppointmentPage() {
       time: "09:30",
       notes: "Follow-up for blood pressure",
     },
-  ]);
+  ]));
+  const [contacts, setContacts] = useState<Contact[]>(() => load(KEYS.contacts, []));
 
   // --- add appointment sheet ---
-  const [addOpen, setAddOpen]       = useState(false);
+  const [addOpen, setAddOpen]         = useState(false);
   const [newHospital, setNewHospital] = useState("");
-  const [newDate, setNewDate]       = useState("");
-  const [newTime, setNewTime]       = useState("09:00");
-  const [newNotes, setNewNotes]     = useState("");
+  const [newDate, setNewDate]         = useState("");
+  const [newTime, setNewTime]         = useState("09:00");
+  const [newNotes, setNewNotes]       = useState("");
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
+  // --- contacts sheet ---
+  const [contactsOpen, setContactsOpen]         = useState(false);
+  const [newContactName, setNewContactName]     = useState("");
+  const [newContactPhone, setNewContactPhone]   = useState("");
+  const [newContactRelation, setNewContactRelation] = useState("");
+
+  const addContact = () => {
+    if (!newContactName.trim() || !newContactPhone.trim()) return;
+    const phone = newContactPhone.trim();
+    const contact: Contact = {
+      id: uid(),
+      name: newContactName.trim(),
+      phone: phone.startsWith("+") ? phone : `+${phone}`,
+      relation: newContactRelation.trim() || "Family",
+    };
+    setContacts(prev => [...prev, contact]);
+    setNewContactName(""); setNewContactPhone(""); setNewContactRelation("");
+  };
+
+  const removeContact = (id: string) => {
+    setContacts(prev => prev.filter(c => c.id !== id));
+    setSelectedContactIds(prev => prev.filter(cid => cid !== id));
+  };
+
+  const toggleContactSelect = (id: string) => {
+    setSelectedContactIds(prev =>
+      prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
+    );
+  };
 
   const addAppointment = () => {
     if (!newHospital.trim() || !newDate) return;
@@ -53,15 +93,23 @@ export default function AppointmentPage() {
     setNewHospital(""); setNewDate(""); setNewTime("09:00"); setNewNotes("");
     setAddOpen(false);
 
-    // Trigger n8n workflow 2 — appointment → Google Calendar + family notify
+    // Fire one webhook per selected contact
     const n8nUrl = process.env.NEXT_PUBLIC_N8N_URL;
-    if (n8nUrl) {
-      fetch(`${n8nUrl}/webhook/kai-new-appointment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newAppt),
-      }).catch(() => {});
+    if (n8nUrl && selectedContactIds.length > 0) {
+      const selected = contacts.filter(c => selectedContactIds.includes(c.id));
+      selected.forEach(contact => {
+        fetch(`${n8nUrl}/webhook/kai-new-appointment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...newAppt,
+            to: contact.phone,
+            contactName: contact.name,
+          }),
+        }).catch(() => {});
+      });
     }
+    setSelectedContactIds([]);
   };
 
   const deleteAppointment = (id: string) => {
@@ -132,7 +180,6 @@ export default function AppointmentPage() {
     reader.readAsDataURL(file);
   };
 
-  // --- attach doc + analyze ---
   const attachDoc = (apptId: string, imageUrl: string) => {
     setAppointments(prev => prev.map(a =>
       a.id !== apptId ? a : { ...a, doc: { image: imageUrl, analyzing: true } }
@@ -163,7 +210,6 @@ export default function AppointmentPage() {
       setAppointments(prev => prev.map(a =>
         a.id !== apptId ? a : { ...a, doc: { image: imageUrl, report: data, analyzing: false } }
       ));
-      // Trigger n8n workflow 5 — receipt scanned → family notification
       fireReceiptWebhook({ hospital: data.hospital, total: data.total, currency: data.currency, items: data.items, claimNote: data.claimSummary });
     } catch {
       setAppointments(prev => prev.map(a =>
@@ -172,7 +218,23 @@ export default function AppointmentPage() {
     }
   };
 
-  useEffect(() => { save(KEYS.appointments, appointments); }, [appointments]);
+  useEffect(() => {
+    hydrate().then((data) => {
+      if (data[KEYS.appointments]?.length) setAppointments(data[KEYS.appointments]);
+      if (data[KEYS.contacts]?.length)     setContacts(data[KEYS.contacts]);
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    save(KEYS.appointments, appointments);
+  }, [appointments, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    save(KEYS.contacts, contacts);
+  }, [contacts, hydrated]);
 
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
@@ -265,11 +327,83 @@ export default function AppointmentPage() {
           </div>
         )}
 
+        {/* Contacts management sheet */}
+        {contactsOpen && (
+          <div className="absolute inset-0 z-50 flex items-end" onClick={() => setContactsOpen(false)}>
+            <div
+              className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200 max-h-[85vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
+              <p className="text-sm font-bold text-white text-center">Family Contacts</p>
+              <p className="text-[11px] text-white/40 text-center -mt-2">These contacts will receive WhatsApp notifications</p>
+
+              {/* Existing contacts */}
+              {contacts.length > 0 && (
+                <div className="space-y-2">
+                  {contacts.map(c => (
+                    <div key={c.id} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+                      <div className="h-9 w-9 rounded-full bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center shrink-0 text-sm font-bold text-yellow-300">
+                        {c.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{c.name}</p>
+                        <p className="text-[11px] text-white/40 truncate">{c.relation} · {c.phone}</p>
+                      </div>
+                      <button
+                        onClick={() => removeContact(c.id)}
+                        className="h-7 w-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/30 hover:text-red-400 hover:border-red-400/30 transition-colors shrink-0"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new contact */}
+              <div className="border-t border-white/10 pt-4 space-y-3">
+                <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Add New Contact</p>
+                <input
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-yellow-400/50"
+                  placeholder="Name (e.g. Mum)"
+                  value={newContactName}
+                  onChange={e => setNewContactName(e.target.value)}
+                />
+                <input
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-yellow-400/50"
+                  placeholder="Phone number (e.g. +60123456789)"
+                  value={newContactPhone}
+                  onChange={e => setNewContactPhone(e.target.value)}
+                  type="tel"
+                />
+                <input
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-yellow-400/50"
+                  placeholder="Relation (e.g. Mother, Sibling)"
+                  value={newContactRelation}
+                  onChange={e => setNewContactRelation(e.target.value)}
+                />
+                <button
+                  onClick={addContact}
+                  disabled={!newContactName.trim() || !newContactPhone.trim()}
+                  className="w-full py-3 rounded-xl bg-yellow-400 text-black font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Add Contact
+                </button>
+              </div>
+
+              <button onClick={() => setContactsOpen(false)} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm font-medium">
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Add appointment bottom sheet */}
         {addOpen && (
           <div className="absolute inset-0 z-50 flex items-end" onClick={() => setAddOpen(false)}>
             <div
-              className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200"
+              className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200 max-h-[90vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
@@ -316,12 +450,63 @@ export default function AppointmentPage() {
                 />
               </div>
 
+              {/* Notify section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Notify via WhatsApp</label>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setAddOpen(false); setContactsOpen(true); }}
+                    className="text-[11px] text-yellow-400 font-bold"
+                  >
+                    + Manage contacts
+                  </button>
+                </div>
+
+                {contacts.length === 0 ? (
+                  <div className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-[12px] text-white/30 text-center">
+                    No contacts yet — tap "Manage contacts" to add family members
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {contacts.map(c => {
+                      const selected = selectedContactIds.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => toggleContactSelect(c.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                            selected
+                              ? "bg-yellow-400/10 border-yellow-400/40"
+                              : "bg-white/5 border-white/10"
+                          }`}
+                        >
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold transition-colors ${
+                            selected ? "bg-yellow-400 text-black" : "bg-white/10 text-white/50"
+                          }`}>
+                            {selected ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            ) : (
+                              c.name.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className={`text-sm font-semibold ${selected ? "text-yellow-100" : "text-white/70"}`}>{c.name}</p>
+                            <p className="text-[11px] text-white/30">{c.relation} · {c.phone}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={addAppointment}
                 disabled={!newHospital.trim() || !newDate}
                 className="w-full py-3.5 rounded-xl bg-yellow-400 text-black font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
               >
                 Save Appointment
+                {selectedContactIds.length > 0 && ` · Notify ${selectedContactIds.length}`}
               </button>
             </div>
           </div>
@@ -355,6 +540,16 @@ export default function AppointmentPage() {
                     <p className="text-xs text-white/70 mt-0.5">Hospital visits & receipts</p>
                   </div>
                 </div>
+                {/* Contacts button */}
+                <button
+                  onClick={() => setContactsOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-300"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <span className="text-[11px] text-yellow-300 font-bold">
+                    Contacts {contacts.length > 0 && `(${contacts.length})`}
+                  </span>
+                </button>
               </div>
 
               <div className="overflow-y-auto pt-5 space-y-5 scrollbar-hide pb-2">

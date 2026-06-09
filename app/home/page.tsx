@@ -13,6 +13,14 @@ export default function HomeDashboard() {
   const [activeTab, setActiveTab] = useState("home");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isShiftRequestsModalOpen, setIsShiftRequestsModalOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<{ caregiverName?: string; patientName?: string } | null>(null);
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem("kai_user_profile");
+      if (raw) setUserProfile(JSON.parse(raw));
+    } catch {}
+  }, []);
 
   // Mock data for shift requests
   const [shiftRequests, setShiftRequests] = useState([
@@ -102,14 +110,14 @@ export default function HomeDashboard() {
         
         {/* Animated Background Snow */}
         <div className="absolute inset-0 bg-[#0a0a0a]" />
-        <PixelSnow 
-          color="#ffffff" 
-          flakeSize={0.015} 
-          minFlakeSize={1.0}
-          density={0.35} 
-          speed={0.8} 
-          variant="round" 
-          className="opacity-40 mix-blend-screen" 
+        <PixelSnow
+          color="#ffffff"
+          flakeSize={0.018}
+          minFlakeSize={1.2}
+          density={0.5}
+          speed={0.8}
+          variant="round"
+          className="opacity-60"
         />
         <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[50%] rounded-full bg-yellow-500/10 blur-[120px] mix-blend-screen pointer-events-none" />
         <div className="absolute top-[40%] -right-[20%] w-[60%] h-[40%] rounded-full bg-blue-500/10 blur-[100px] mix-blend-screen pointer-events-none" />
@@ -160,8 +168,8 @@ export default function HomeDashboard() {
               {/* Box 1: Patient Caring */}
               <div onClick={() => router.push('/patient_caring')}>
                 <SpotlightCard spotlightColor="rgba(244, 114, 182, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
-                  <div className="h-32 w-full relative bg-white/5">
-                    <img src="/homecare_icon.jpg" alt="Patient Caring" className="h-full w-full object-cover object-center" />
+                  <div className="h-32 w-full relative bg-white/5 overflow-hidden">
+                    <img src="/homecare_icon.webp" alt="Patient Caring" className="h-full w-full object-cover object-center scale-110" />
                   </div>
                   <div className="p-3.5 flex flex-col justify-between flex-1">
                     <div>
@@ -174,8 +182,8 @@ export default function HomeDashboard() {
               {/* Box 2: Household Management */}
               <div onClick={() => router.push('/household_management')}>
               <SpotlightCard spotlightColor="rgba(56, 189, 248, 0.2)" className="flex flex-col overflow-hidden rounded-[24px] border border-white/20 bg-black/40 backdrop-blur-[40px] shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer">
-                <div className="h-32 w-full relative bg-white/5">
-                  <img src="/household.jpg" alt="Household Management" className="h-full w-full object-cover object-center" />
+                <div className="h-32 w-full relative bg-white/5 overflow-hidden">
+                  <img src="/household.jpg" alt="Household Management" className="h-full w-full object-cover object-center scale-110" />
                 </div>
                 <div className="p-3.5 flex flex-col justify-between flex-1">
                   <div>
@@ -229,8 +237,8 @@ export default function HomeDashboard() {
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
                 <div className="h-6 w-6 rounded-full bg-yellow-500/20 flex items-center justify-center text-xs shrink-0">✨</div>
                 <div>
-                  <p className="text-[11px] font-semibold text-white leading-none">Angel</p>
-                  <p className="text-[9px] text-white/40 mt-0.5">Primary Caregiver</p>
+                  <p className="text-[11px] font-semibold text-white leading-none">{userProfile?.caregiverName ?? "Caregiver"}</p>
+                  <p className="text-[9px] text-white/40 mt-0.5">Caring for {userProfile?.patientName ?? "Patient"}</p>
                 </div>
               </div>
               <button onClick={() => { setIsProfileOpen(false); setIsShiftRequestsModalOpen(true); }} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-white/8 transition-colors">

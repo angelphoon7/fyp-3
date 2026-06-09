@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import IPhone13Frame from "@/components/iPhone13Frame";
-import Galaxy from "./Galaxy";
-import { load, KEYS } from "@/app/lib/store";
+import { load, hydrate, KEYS } from "@/app/lib/store";
 import type { HealthSummaryResult } from "@/app/api/health-summary/route";
 
 // ── types mirroring each feature page ────────────────────────────────────────
@@ -60,12 +59,13 @@ export default function ReportPage() {
   const [aiError,      setAiError]     = useState<string | null>(null);
   const [downloading,  setDownloading] = useState(false);
 
-  // Load from localStorage on mount
   useEffect(() => {
-    setCareTasks(load<CareTask[]>(KEYS.careTasks, []));
-    setMedications(load<Medication[]>(KEYS.medications, []));
-    setAppointments(load<Appointment[]>(KEYS.appointments, []));
-    setHouseholdTasks(load<HouseTask[]>(KEYS.householdTasks, []));
+    hydrate().then((remote) => {
+      setCareTasks(remote[KEYS.careTasks]      ?? load<CareTask[]>(KEYS.careTasks, []));
+      setMedications(remote[KEYS.medications]  ?? load<Medication[]>(KEYS.medications, []));
+      setAppointments(remote[KEYS.appointments] ?? load<Appointment[]>(KEYS.appointments, []));
+      setHouseholdTasks(remote[KEYS.householdTasks] ?? load<HouseTask[]>(KEYS.householdTasks, []));
+    });
   }, []);
 
   // ── derived stats ─────────────────────────────────────────────────────────
@@ -262,70 +262,72 @@ export default function ReportPage() {
 
   return (
     <IPhone13Frame>
-      <div className="flex min-h-full flex-col bg-slate-900 relative text-white font-sans">
+      <div className="flex min-h-full flex-col bg-[#0f1117] relative text-white font-sans">
 
-        {/* Galaxy Background */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <Galaxy density={0.8} glowIntensity={0.4} twinkleIntensity={0.5} speed={0.5} />
-        </div>
+        <div className="flex flex-col flex-1 overflow-y-auto pb-10">
 
-        <div className="relative z-10 flex flex-col flex-1 overflow-y-auto pb-10">
-
-          {/* Header */}
-          <div className="bg-slate-900/70 backdrop-blur-lg px-5 pb-5 pt-12 border-b border-slate-800">
-            <div className="flex items-center gap-3">
+          {/* Header — glass pill matching Home Dashboard */}
+          <div className="relative mx-4 mt-12 mb-1 rounded-[22px]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(180,180,180,0.13) 0%, rgba(120,120,120,0.08) 100%)',
+              backdropFilter: 'blur(40px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+              border: '1px solid rgba(255,255,255,0.18)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -1px 1px rgba(0,0,0,0.15)'
+            }}
+          >
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+            <div className="relative flex items-center gap-3 px-5 py-4">
               <button
                 onClick={() => router.push("/home")}
-                className="h-9 w-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0 hover:bg-white/10 transition-colors"
+                className="h-8 w-8 rounded-full bg-white/8 border border-white/15 flex items-center justify-center shrink-0 active:bg-white/15 transition-colors"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
               </button>
               <div className="flex-1 min-w-0">
-                <h1 className="text-xl font-bold text-white tracking-wide">Health Report</h1>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {new Date().toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                </p>
+                <p className="text-white/40 text-[9px] font-semibold tracking-[0.22em] uppercase mb-0.5">Report</p>
+                <h1 className="text-[20px] font-bold tracking-tight text-white leading-none">Health Report</h1>
               </div>
               <button
                 onClick={downloadPDF}
                 disabled={!hasAnyData || downloading}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-bold hover:bg-yellow-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/8 border border-white/15 text-white/60 text-xs font-medium active:bg-white/15 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
               >
                 {downloading ? (
-                  <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                 ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 )}
-                {downloading ? "Generating…" : "Export PDF"}
+                {downloading ? "Saving…" : "Export PDF"}
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 p-4">
+          <div className="flex flex-col gap-3 p-4">
 
             {/* Overall Score */}
-            <div className={`rounded-2xl border p-4 flex items-center gap-4 ${scoreBg(overallScore)}`}>
-              <div className="relative h-16 w-16 shrink-0">
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4 flex items-center gap-4">
+              <div className="relative h-14 w-14 shrink-0">
                 <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
                   <circle
                     cx="18" cy="18" r="15.9" fill="none"
-                    stroke={overallScore >= 80 ? "#34d399" : overallScore >= 55 ? "#facc15" : "#f87171"}
+                    stroke={overallScore >= 80 ? "#34d399" : overallScore >= 55 ? "#fbbf24" : "#94a3b8"}
                     strokeWidth="3"
                     strokeDasharray={`${overallScore}, 100`}
                     strokeLinecap="round"
                   />
                 </svg>
-                <span className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${scoreColor(overallScore)}`}>
+                <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white/70">
                   {hasAnyData ? overallScore : "—"}
                 </span>
               </div>
               <div>
-                <p className="text-xs text-white/40 font-bold uppercase tracking-wider">Overall Care Score</p>
-                <p className={`text-2xl font-bold mt-0.5 ${scoreColor(overallScore)}`}>
-                  {!hasAnyData ? "No data yet" : overallScore >= 80 ? "Good" : overallScore >= 55 ? "Fair" : "Needs Attention"}
+                <p className="text-[10px] text-white/35 font-medium mb-0.5">Overall Care Score</p>
+                <p className="text-lg font-semibold text-white">
+                  {!hasAnyData ? "No data yet" : overallScore >= 80 ? "Looking good" : overallScore >= 55 ? "On track" : "Getting started"}
                 </p>
-                <p className="text-xs text-white/40 mt-0.5">Based on today's logged activity</p>
+                <p className="text-[11px] text-white/30 mt-0.5">Based on today's activity</p>
               </div>
             </div>
 
@@ -333,48 +335,46 @@ export default function ReportPage() {
             <div className="grid grid-cols-2 gap-3">
 
               {/* Care Tasks */}
-              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">🏥</span>
-                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Patient Care</p>
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-base">🏥</span>
+                  <p className="text-[11px] text-white/40 font-medium">Patient Care</p>
                 </div>
                 {careTotal > 0 ? (
                   <>
-                    <p className={`text-2xl font-bold ${scoreColor(Math.round((careCompleted / careTotal) * 100))}`}>
-                      {careCompleted}/{careTotal}
-                    </p>
-                    <p className="text-[11px] text-white/40 mt-0.5">tasks completed</p>
-                    <div className="mt-2 space-y-1">
+                    <p className="text-xl font-semibold text-white">{careCompleted}<span className="text-white/30 text-sm font-normal">/{careTotal}</span></p>
+                    <p className="text-[10px] text-white/30 mt-0.5 mb-2">tasks completed</p>
+                    <div className="space-y-1">
                       {careTasks.map(t => (
                         <div key={t.id} className="flex items-center justify-between text-[11px]">
-                          <span className="text-white/50">{t.icon} {t.name}</span>
-                          <span className={t.logs.length > 0 ? "text-emerald-400 font-bold" : "text-white/20"}>
-                            {t.logs.length > 0 ? `✓ ${t.logs.length}x` : "—"}
+                          <span className="text-white/45">{t.icon} {t.name}</span>
+                          <span className={t.logs.length > 0 ? "text-emerald-400" : "text-white/20"}>
+                            {t.logs.length > 0 ? `✓` : "—"}
                           </span>
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-white/20 italic">No care tasks logged</p>
+                  <p className="text-[11px] text-white/20 italic mt-1">No tasks yet</p>
                 )}
               </div>
 
               {/* Medication */}
-              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">💊</span>
-                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Medication</p>
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-base">💊</span>
+                  <p className="text-[11px] text-white/40 font-medium">Medication</p>
                 </div>
                 {medTotal > 0 ? (
                   <>
-                    <p className={`text-2xl font-bold ${scoreColor(medPct)}`}>{medPct}%</p>
-                    <p className="text-[11px] text-white/40 mt-0.5">{medTaken}/{medTotal} doses taken</p>
-                    <div className="mt-2 space-y-1">
+                    <p className="text-xl font-semibold text-white">{medPct}<span className="text-white/30 text-sm font-normal">%</span></p>
+                    <p className="text-[10px] text-white/30 mt-0.5 mb-2">{medTaken}/{medTotal} doses taken</p>
+                    <div className="space-y-1">
                       {medications.map(m => (
                         <div key={m.id} className="flex items-center justify-between text-[11px]">
-                          <span className="text-white/50 truncate pr-1">{m.name}</span>
-                          <span className={m.schedules.every(s => s.taken) ? "text-emerald-400 font-bold" : "text-yellow-400"}>
+                          <span className="text-white/45 truncate pr-1">{m.name}</span>
+                          <span className={m.schedules.every(s => s.taken) ? "text-emerald-400" : "text-white/40"}>
                             {m.schedules.filter(s => s.taken).length}/{m.schedules.length}
                           </span>
                         </div>
@@ -382,27 +382,25 @@ export default function ReportPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-white/20 italic">No medications added</p>
+                  <p className="text-[11px] text-white/20 italic mt-1">No medications</p>
                 )}
               </div>
 
               {/* Household */}
-              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">🏠</span>
-                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Household</p>
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-base">🏠</span>
+                  <p className="text-[11px] text-white/40 font-medium">Household</p>
                 </div>
                 {houseTotal > 0 ? (
                   <>
-                    <p className={`text-2xl font-bold ${scoreColor(Math.round((houseCompleted / houseTotal) * 100))}`}>
-                      {houseCompleted}/{houseTotal}
-                    </p>
-                    <p className="text-[11px] text-white/40 mt-0.5">tasks done</p>
-                    <div className="mt-2 space-y-1">
+                    <p className="text-xl font-semibold text-white">{houseCompleted}<span className="text-white/30 text-sm font-normal">/{houseTotal}</span></p>
+                    <p className="text-[10px] text-white/30 mt-0.5 mb-2">tasks done</p>
+                    <div className="space-y-1">
                       {householdTasks.map(t => (
                         <div key={t.id} className="flex items-center justify-between text-[11px]">
-                          <span className="text-white/50">{t.icon} {t.name}</span>
-                          <span className={t.logs.length > 0 ? "text-emerald-400 font-bold" : "text-white/20"}>
+                          <span className="text-white/45">{t.icon} {t.name}</span>
+                          <span className={t.logs.length > 0 ? "text-emerald-400" : "text-white/20"}>
                             {t.logs.length > 0 ? "✓" : "—"}
                           </span>
                         </div>
@@ -410,43 +408,43 @@ export default function ReportPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-white/20 italic">No tasks logged</p>
+                  <p className="text-[11px] text-white/20 italic mt-1">No tasks yet</p>
                 )}
               </div>
 
               {/* Appointments */}
-              <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">📅</span>
-                  <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Appointments</p>
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <span className="text-base">📅</span>
+                  <p className="text-[11px] text-white/40 font-medium">Appointments</p>
                 </div>
                 {upcomingAppts.length > 0 ? (
                   <div className="space-y-2">
                     {upcomingAppts.map(a => (
                       <div key={a.id}>
-                        <p className="text-[11px] font-bold text-white/80 truncate">{a.hospital}</p>
-                        <p className="text-[10px] text-yellow-300/70">{formatDate(a.date)} · {formatTime(a.time)}</p>
+                        <p className="text-[11px] font-medium text-white/75 truncate">{a.hospital}</p>
+                        <p className="text-[10px] text-white/35 mt-0.5">{formatDate(a.date)} · {formatTime(a.time)}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-white/20 italic">No upcoming visits</p>
+                  <p className="text-[11px] text-white/20 italic mt-1">No upcoming visits</p>
                 )}
               </div>
             </div>
 
-            {/* Medication detail */}
+            {/* Pending doses */}
             {medications.some(m => m.schedules.some(s => !s.taken)) && (
-              <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-                <p className="text-xs text-yellow-300/70 font-bold uppercase tracking-wider mb-3">Pending Doses</p>
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
+                <p className="text-[11px] text-white/40 font-medium mb-2.5">Pending doses</p>
                 <div className="space-y-2">
                   {medications.flatMap(m =>
                     m.schedules
                       .filter(s => !s.taken)
                       .map(s => (
-                        <div key={s.id} className="flex justify-between items-center text-[12px]">
-                          <span className="text-white/70">{m.name} <span className="text-white/30">{m.dosage}</span></span>
-                          <span className="text-yellow-300/70 font-medium">{s.period} · {s.time}</span>
+                        <div key={s.id} className="flex justify-between items-center text-[11px]">
+                          <span className="text-white/60">{m.name} <span className="text-white/25">{m.dosage}</span></span>
+                          <span className="text-white/40">{s.period} · {s.time}</span>
                         </div>
                       ))
                   )}
@@ -455,9 +453,9 @@ export default function ReportPage() {
             )}
 
             {/* AI Health Summary */}
-            <div className="rounded-2xl border border-slate-700 bg-slate-800/60 backdrop-blur-md p-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-white/50 font-bold uppercase tracking-wider">AI Health Summary</p>
+                <p className="text-[11px] text-white/40 font-medium">Care summary</p>
                 <span className="text-[10px] text-white/20">Gemini 2.5</span>
               </div>
 
@@ -550,14 +548,14 @@ export default function ReportPage() {
             </div>
 
             {!hasAnyData && (
-              <div className="text-center py-6">
-                <p className="text-4xl mb-3">📋</p>
+              <div className="text-center py-8">
+                <p className="text-3xl mb-3">📋</p>
                 <p className="text-sm text-white/40">No activity logged yet.</p>
-                <p className="text-xs text-white/25 mt-1">Use Patient Caring, Medication, or Household pages to start tracking.</p>
+                <p className="text-xs text-white/25 mt-1">Start tracking from Patient Caring, Medication, or Household.</p>
               </div>
             )}
 
-            <p className="text-center text-[10px] text-slate-600">
+            <p className="text-center text-[10px] text-white/15">
               KAI · {new Date().toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}
             </p>
           </div>

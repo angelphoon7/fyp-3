@@ -134,11 +134,14 @@ export default function Onboarding() {
     // Final step — save profile
     setSubmitting(true);
     try {
+      const profile = { ...form, language: lang };
       await fetch("/api/onboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, language: lang }),
+        body: JSON.stringify(profile),
       });
+      // Cache profile locally so the app can read it without hitting the API
+      localStorage.setItem("kai_user_profile", JSON.stringify(profile));
       setDone(true);
     } finally {
       setSubmitting(false);

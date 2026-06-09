@@ -5,11 +5,12 @@ import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "./ReflectiveCard";
 import type { NutritionResult } from "@/app/api/analyze-meal/route";
-import { save, KEYS } from "@/app/lib/store";
+import { save, load, hydrate, KEYS } from "@/app/lib/store";
 
 type Log = {
   label: string;
   time: string;
+  completedAt: string;   // ISO 8601 timestamp — REQ_F304
   image?: string;
   nutrition?: NutritionResult;
   analyzing?: boolean;
@@ -25,11 +26,12 @@ type Task = {
 export default function PatientCaringPage() {
   const router = useRouter();
 
-  const [patientTasks, setPatientTasks] = useState<Task[]>([
+  const [hydrated, setHydrated] = useState(false);
+  const [patientTasks, setPatientTasks] = useState<Task[]>(() => load(KEYS.careTasks, [
     { id: "bathing",  name: "Bathing",  logs: [], icon: "🛁" },
     { id: "dressing", name: "Dressing", logs: [], icon: "👕" },
     { id: "feeding",  name: "Feeding",  logs: [], icon: "🥣" },
-  ]);
+  ]));
 
   const [pickerOpen, setPickerOpen]   = useState(false);
   const [cameraOpen, setCameraOpen]   = useState(false);
@@ -92,12 +94,14 @@ export default function PatientCaringPage() {
 
   // --- meal log + nutrition ---
   const addMealLog = (imageUrl: string) => {
-    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const now  = new Date();
+    const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const completedAt = now.toISOString();
     setPatientTasks(prev => prev.map(t => {
       if (t.id !== "feeding") return t;
       const labels = ["First check in", "Second check in", "Third check in", "Fourth check in"];
       const label  = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
-      return { ...t, logs: [...t.logs, { label, time, image: imageUrl, analyzing: true }] };
+      return { ...t, logs: [...t.logs, { label, time, completedAt, image: imageUrl, analyzing: true }] };
     }));
     analyzeNutrition(imageUrl);
   };
@@ -126,16 +130,26 @@ export default function PatientCaringPage() {
   const addLogToTask = (taskId: string) => {
     setPatientTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t;
+      const now  = new Date();
       const labels = ["First check in", "Second check in", "Third check in", "Fourth check in"];
       const label  = labels[t.logs.length] ?? `Check in ${t.logs.length + 1}`;
-      const time   = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      return { ...t, logs: [...t.logs, { label, time }] };
+      const time   = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const completedAt = now.toISOString();
+      return { ...t, logs: [...t.logs, { label, time, completedAt }] };
     }));
   };
 
   useEffect(() => {
+    hydrate().then((data) => {
+      if (data[KEYS.careTasks]?.length) setPatientTasks(data[KEYS.careTasks]);
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     save(KEYS.careTasks, patientTasks);
-  }, [patientTasks]);
+  }, [patientTasks, hydrated]);
 
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
@@ -308,9 +322,19 @@ export default function PatientCaringPage() {
                         <div className="mt-4 pt-3 border-t border-yellow-400/20 w-full flex flex-col gap-4">
                           {task.logs.map((log, idx) => (
                             <div key={idx} className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="text-yellow-100/70 font-medium tracking-wide">{log.label}</span>
-                                <span className="text-yellow-300 font-bold drop-shadow-md">{log.time}</span>
+                              <div className="flex justify-between items-start text-xs">
+                                <div className="flex items-center gap-1.5">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21 / 0.6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                  <span className="text-yellow-100/70 font-medium tracking-wide">{log.label}</span>
+                                </div>
+                                <div className="text-right shrink-0 ml-2">
+                                  <p className="text-yellow-300 font-bold drop-shadow-md leading-none">{log.time}</p>
+                                  <p className="text-white/30 text-[9px] mt-0.5">
+                                    {log.completedAt
+                                      ? new Date(log.completedAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
+                                      : ""}
+                                  </p>
+                                </div>
                               </div>
                               {log.image && (
                                 <div className="h-24 w-full rounded-lg overflow-hidden border border-white/10 relative">
@@ -318,7 +342,11 @@ export default function PatientCaringPage() {
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
                                   <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                                     <span className="text-[9px] text-white/60 font-medium">Meal Photo</span>
-                                    <span className="text-[10px] text-yellow-300 font-bold drop-shadow">{log.time}</span>
+                                    <span className="text-[10px] text-yellow-300 font-bold drop-shadow">
+                                      {log.completedAt
+                                        ? new Date(log.completedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                                        : log.time}
+                                    </span>
                                   </div>
                                 </div>
                               )}
@@ -332,7 +360,6 @@ export default function PatientCaringPage() {
                                 <div className="rounded-lg border border-yellow-400/20 bg-yellow-400/5 p-3 space-y-2">
                                   <div className="flex items-center justify-between">
                                     <p className="text-[10px] text-yellow-300/70 font-bold uppercase tracking-wider">Nutrition Estimate</p>
-                                    <span className="text-[10px] text-white/30">AI</span>
                                   </div>
                                   {log.nutrition.foods.length > 0 && (
                                     <p className="text-[11px] text-white/60 leading-relaxed">{log.nutrition.foods.join(", ")}</p>

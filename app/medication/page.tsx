@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "@/app/patient_caring/ReflectiveCard";
-import { save, KEYS } from "@/app/lib/store";
+import { save, load, hydrate, KEYS } from "@/app/lib/store";
 
 type Schedule = {
   id: string;
@@ -37,7 +37,8 @@ function uid() {
 export default function MedicationPage() {
   const router = useRouter();
 
-  const [medications, setMedications] = useState<Medication[]>([
+  const [hydrated, setHydrated] = useState(false);
+  const [medications, setMedications] = useState<Medication[]>(() => load(KEYS.medications, [
     {
       id: uid(),
       name: "Metformin",
@@ -55,7 +56,7 @@ export default function MedicationPage() {
         { id: uid(), period: "Morning",   time: "08:00", taken: false },
       ],
     },
-  ]);
+  ]));
 
   // --- add medication sheet ---
   const [addOpen, setAddOpen]           = useState(false);
@@ -108,7 +109,17 @@ export default function MedicationPage() {
     setMedications(prev => prev.filter(m => m.id !== medId));
   };
 
-  useEffect(() => { save(KEYS.medications, medications); }, [medications]);
+  useEffect(() => {
+    hydrate().then((data) => {
+      if (data[KEYS.medications]?.length) setMedications(data[KEYS.medications]);
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    save(KEYS.medications, medications);
+  }, [medications, hydrated]);
 
   const totalSlots  = medications.reduce((s, m) => s + m.schedules.length, 0);
   const takenSlots  = medications.reduce((s, m) => s + m.schedules.filter(sc => sc.taken).length, 0);

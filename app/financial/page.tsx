@@ -5,7 +5,7 @@ import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter, usePathname } from "next/navigation";
 import PixelSnow from "../onboarding/PixelSnow";
 import Dock from "../home/bottom widget/Dock";
-import { load, KEYS } from "@/app/lib/store";
+import { load, hydrate, KEYS } from "@/app/lib/store";
 import type { FinancialAnalysisResult } from "@/app/api/financial-analysis/route";
 
 // ── types matching what each page stores ──────────────────────────────────────
@@ -29,6 +29,7 @@ type Transaction = {
   category: "groceries" | "medical";
   items: { label: string; amount: number }[];
   claimNote: string;
+  image?: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,13 +45,14 @@ function buildTransactions(householdTasks: HouseTask[], appointments: Appointmen
       const r = log.receipt;
       txns.push({
         id: `grocery-${idx}`,
-        title: r.store || "Grocery Store",
+        title: (r.store && r.store !== "Unknown") ? r.store : "Grocery Receipt",
         date: r.date || log.time,
         amount: r.total,
         currency: r.currency || "MYR",
         category: "groceries",
         items: r.items.map(i => ({ label: `${i.qty && i.qty > 1 ? `${i.qty}x ` : ""}${i.name}`, amount: i.price })),
         claimNote: r.claimSummary,
+        image: log.image,
       });
     });
   }
@@ -100,9 +102,18 @@ export default function FinancialPage() {
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    const householdTasks = load<HouseTask[]>(KEYS.householdTasks, []);
-    const appointments   = load<Appointment[]>(KEYS.appointments, []);
-    setTransactions(buildTransactions(householdTasks, appointments));
+    // Load from localStorage immediately, then sync from Supabase
+    const fromLocal = buildTransactions(
+      load<HouseTask[]>(KEYS.householdTasks, []),
+      load<Appointment[]>(KEYS.appointments, [])
+    );
+    if (fromLocal.length > 0) setTransactions(fromLocal);
+
+    hydrate().then((remote) => {
+      const householdTasks = remote[KEYS.householdTasks] ?? load<HouseTask[]>(KEYS.householdTasks, []);
+      const appointments   = remote[KEYS.appointments]   ?? load<Appointment[]>(KEYS.appointments, []);
+      setTransactions(buildTransactions(householdTasks, appointments));
+    });
   }, []);
 
   const groceryTxns = transactions.filter(t => t.category === "groceries");
@@ -289,20 +300,38 @@ export default function FinancialPage() {
         <div className="relative z-10 h-full w-full pb-28 overflow-y-auto scrollbar-hide">
 
           {/* Header */}
-          <header className="sticky top-0 z-20 bg-black/40 backdrop-blur-3xl border-b border-white/10 flex items-center justify-between px-6 py-4 pt-14">
-            <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-md">Financial</h1>
-            <button
-              onClick={downloadPDF}
-              disabled={!hasData || downloading}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              {downloading
-                ? <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              }
-              {downloading ? "Generating…" : "Export PDF"}
-            </button>
-          </header>
+          <div className="relative mx-4 mt-12 mb-1 rounded-[22px]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(180,180,180,0.13) 0%, rgba(120,120,120,0.08) 100%)',
+              backdropFilter: 'blur(40px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+              border: '1px solid rgba(255,255,255,0.18)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -1px 1px rgba(0,0,0,0.15)'
+            }}
+          >
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+            <div className="relative flex items-center gap-3 px-5 py-4">
+              <button onClick={() => router.push("/home")} className="flex items-center justify-center w-7 h-7 rounded-full shrink-0" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-white/40 text-[9px] font-semibold tracking-[0.22em] uppercase mb-0.5">Financial</p>
+                <h1 className="text-[20px] font-bold tracking-tight text-white leading-none">Overview</h1>
+              </div>
+              <button
+                onClick={downloadPDF}
+                disabled={!hasData || downloading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-emerald-400 text-[11px] font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}
+              >
+                {downloading
+                  ? <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                }
+                {downloading ? "Generating…" : "Export PDF"}
+              </button>
+            </div>
+          </div>
 
           <div className="px-6 py-5 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
@@ -399,8 +428,14 @@ export default function FinancialPage() {
                       onClick={() => setExpanded(expanded === t.id ? null : t.id)}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-lg border ${t.category === "groceries" ? "bg-orange-500/10 border-orange-500/20" : "bg-blue-500/10 border-blue-500/20"}`}>
-                          {t.category === "groceries" ? "🛒" : "🏥"}
+                        <div className={`h-10 w-10 rounded-xl overflow-hidden shrink-0 border ${t.category === "groceries" ? "border-orange-500/20" : "border-blue-500/20"}`}>
+                          {t.image ? (
+                            <img src={t.image} alt="Receipt" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className={`h-full w-full flex items-center justify-center text-lg ${t.category === "groceries" ? "bg-orange-500/10" : "bg-blue-500/10"}`}>
+                              {t.category === "groceries" ? "🛒" : "🏥"}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <p className="font-bold text-white text-sm">{t.title}</p>
@@ -415,6 +450,11 @@ export default function FinancialPage() {
 
                     {expanded === t.id && (
                       <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-2">
+                        {t.image && (
+                          <div className="w-full h-32 rounded-xl overflow-hidden mb-3 border border-white/10">
+                            <img src={t.image} alt="Receipt photo" className="w-full h-full object-cover" />
+                          </div>
+                        )}
                         {t.items.map((item, i) => (
                           <div key={i} className="flex justify-between text-[12px]">
                             <span className="text-white/50">{item.label}</span>

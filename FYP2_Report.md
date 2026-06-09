@@ -662,7 +662,83 @@ Computed in `whatsapp/memory.ts` by reading the last 7 days of CheckIn documents
 | skippedMeals | INT | Count of days in the past 7 where meals response was NO or TIDAK |
 | raisedConcerns | INT | Count of days in the past 7 where concerns response was YES or YA |
 
+---
 
+## 4.5 Business Model
+
+The KAI Caregiver Support System adopts a relationship-based data model to support structured, accountable, and collaborative caregiving. The relationships between entities are categorised into three types: One-to-One (1:1), One-to-Many (1:N), and Many-to-Many (M:N).
+
+---
+
+### 4.5.1 One-to-One (1:1) Relationship
+
+In a one-to-one relationship, a single entity is associated with exactly one other entity. Each instance on side A corresponds to at most one instance on side B, and vice versa.
+
+#### 4.5.1.1 Application in the System
+
+- **User ↔ UserProfile (WhatsApp Onboarding)**
+  Each registered caregiver login account is linked to exactly one WhatsApp onboarding profile. The UserProfile holds caregiving context (patient name, condition, check-in time) that extends the basic login credentials stored in the User entity.
+
+- **Appointment ↔ AppointmentDoc**
+  Each medical appointment record may have exactly one scanned document attached. The AppointmentDoc stores the raw image and AI-extracted report data (hospital, diagnosis, cost items) tied exclusively to that single appointment.
+
+#### 4.5.1.2 Business Significance
+
+- Ensures each caregiver's WhatsApp profile is personalised and not shared, protecting caregiver-patient confidentiality.
+- Prevents duplicate document records for a single appointment, keeping the financial report accurate.
+- Simplifies navigation — viewing an appointment always leads to one clear document, with no ambiguity.
+
+---
+
+### 4.5.2 One-to-Many (1:N) Relationship
+
+In a one-to-many relationship, a single entity on side A is associated with multiple entities on side B. This is the most common relationship type in the system, reflecting the repeated, day-to-day nature of caregiving activities.
+
+#### 4.5.2.1 Application in the System
+
+- **CareTask → CareLog**
+  One care task (e.g., Bathing, Dressing, Feeding) accumulates many log entries over time. Each log records the time of completion and an optional photo, allowing caregivers to maintain a visual history for a single recurring task.
+
+- **Medication → Schedule**
+  One medication entry (e.g., "Metformin 500mg") can have multiple daily schedules (Morning, Afternoon, Evening, Night). This models real-world prescriptions where a drug is taken at different times of day.
+
+- **HouseholdTask → HouseholdLog**
+  One household task (e.g., Grocery Shopping, Cooking) can have many logged events, each optionally attaching a scanned receipt for financial tracking.
+
+- **UserProfile → CheckIn**
+  One caregiver user accumulates many daily WhatsApp check-in records over time. Each CheckIn document captures the medication response, meal response, vital reading, and any concerns raised on a specific date.
+
+- **CommunityPost → Comment**
+  One community post can receive many comments from different caregivers. This enables discussion threads on shared caregiver experiences and shift-related topics.
+
+- **ShiftRequest → ShiftResponse**
+  One open shift request posted by a caregiver can attract many responses from available caregivers, each with their experience level, rating, and offered fee.
+
+#### 4.5.2.2 Business Significance
+
+- Reflects the repetitive, structured nature of daily caregiving — tasks recur daily, medications are taken multiple times, and check-ins build a longitudinal health timeline.
+- Enables trend analysis: care score calculation aggregates logs across the one-to-many boundary (CareTask → CareLogs, Medication → Schedules).
+- The UserProfile → CheckIn relationship forms the basis of the AI memory module, which reads the past 7 days of check-ins to detect missed medications, skipped meals, and raised concerns.
+- Supports community collaboration: many responses to one shift request ensures caregivers can choose the best match for their needs.
+
+---
+
+### 4.5.3 Many-to-Many (M:N) Relationship
+
+In a many-to-many relationship, entities on both sides can be associated with multiple instances on the other side. In KAI, this relationship is managed through an intermediary entity to maintain data integrity.
+
+#### 4.5.3.1 Application in the System
+
+- **Patient ↔ FamilyMember (via FamilyAccess)**
+  A patient may be monitored by multiple family members, and a family member may (in future) be associated with more than one patient. The FamilyAccess entity acts as the junction, storing the patientId and the familyPhone, linking both parties without duplicating patient data. Family members use the patientId from the onboarding form to gain read access to the patient's care summary via WhatsApp.
+
+#### 4.5.3.2 Business Significance
+
+- Decouples family member access from the caregiver's primary account, enabling extended family visibility without granting editing permissions.
+- The FamilyAccess junction preserves data integrity — changes to a patient's profile do not require updating multiple family member records.
+- Supports scalable family involvement: as more relatives register with the patientId, each receives the same automated daily WhatsApp updates without modifying the core caregiving workflow.
+
+---
 
 ## 4.6 Activity Diagram
 

@@ -16,6 +16,8 @@
     "@genkit-ai/googleai": "^1.28.0",
     "@genkit-ai/vertexai": "^1.32.0",
     "@google-cloud/firestore": "^8.5.0",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.107.0",
     "@types/node-cron": "^3.0.11",
     "@types/three": "^0.184.0",
     "dotenv": "^17.4.2",

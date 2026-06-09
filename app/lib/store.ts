@@ -1,17 +1,14 @@
-// Lightweight localStorage store shared across feature pages.
-// Each page writes its state here; the report page reads and aggregates.
-
 export const KEYS = {
   careTasks:      "kai_care_tasks",
   medications:    "kai_medications",
   appointments:   "kai_appointments",
   householdTasks: "kai_household_tasks",
+  contacts:       "kai_contacts",
 } as const;
 
 export function save<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-    // Push to Firestore so n8n and MCP servers have live data
     fetch("/api/push-state", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,5 +23,23 @@ export function load<T>(key: string, fallback: T): T {
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
+  }
+}
+
+// Fetches all state keys from Supabase and writes them into localStorage.
+// Returns the data so callers can update React state directly.
+export async function hydrate(): Promise<Record<string, any>> {
+  try {
+    const res = await fetch("/api/load-state");
+    if (!res.ok) return {};
+    const data: Record<string, any> = await res.json();
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== null && value !== undefined) {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    }
+    return data;
+  } catch {
+    return {};
   }
 }

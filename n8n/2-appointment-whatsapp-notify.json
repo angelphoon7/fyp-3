@@ -1,0 +1,51 @@
+{
+  "name": "KAI — Appointment → WhatsApp Family Notify",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path":       "kai-new-appointment",
+        "options":    {}
+      },
+      "id": "webhook-appt",
+      "name": "New Appointment Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "kai-new-appointment"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $('New Appointment Webhook').first().json;\nconst date = new Date(`${d.date}T${d.time}`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });\nconst time = new Date(`${d.date}T${d.time}`).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });\nconst greeting = d.contactName ? `Hi ${d.contactName},` : 'Hello,';\n\nconst message = [\n  greeting,\n  ``,\n  `📅 New appointment has been scheduled:`,\n  ``,\n  `🏥 ${d.hospital}`,\n  `🗓️ ${date}`,\n  `🕐 ${time}`,\n  d.notes ? `📝 ${d.notes}` : null,\n  ``,\n  `— KAI Caregiving App`\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { message, to: d.to } }];"
+      },
+      "id": "format-appt-msg",
+      "name": "Format Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "from":    "whatsapp:+14155238886",
+        "to":      "={{ $('New Appointment Webhook').first().json.to }}",
+        "message": "={{ $json.message }}"
+      },
+      "id": "notify-family-appt",
+      "name": "Send WhatsApp to Family",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "New Appointment Webhook": {
+      "main": [[{ "node": "Format Message", "type": "main", "index": 0 }]]
+    },
+    "Format Message": {
+      "main": [[{ "node": "Send WhatsApp to Family", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}

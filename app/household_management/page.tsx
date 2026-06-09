@@ -5,7 +5,7 @@ import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "@/app/patient_caring/ReflectiveCard";
 import type { ReceiptResult } from "@/app/api/analyze-receipt/route";
-import { save, KEYS } from "@/app/lib/store";
+import { save, load, hydrate, KEYS } from "@/app/lib/store";
 
 type Log = {
   label: string;
@@ -27,11 +27,12 @@ type Task = {
 export default function HouseholdManagementPage() {
   const router = useRouter();
 
-  const [tasks, setTasks] = useState<Task[]>([
+  const [hydrated, setHydrated] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>(() => load(KEYS.householdTasks, [
     { id: "cooking",   name: "Cooking Meal",      subtitle: "Tap to photograph the meal",     icon: "🍳", logs: [], hasCamera: true  },
     { id: "cleaning",  name: "Cleaning Room",      subtitle: "Log when room is cleaned",       icon: "🧹", logs: [], hasCamera: false },
     { id: "groceries", name: "Managing Groceries", subtitle: "Snap receipt for expense claim", icon: "🛒", logs: [], hasCamera: true  },
-  ]);
+  ]));
 
   // which task triggered the picker / camera
   const [pickerTaskId, setPickerTaskId]   = useState<string | null>(null);
@@ -140,26 +141,48 @@ export default function HouseholdManagementPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
+
+      // Compute updated tasks directly so we can await the Supabase sync
       setTasks(prev => {
         const updated = prev.map(t => {
           if (t.id !== "groceries") return t;
           return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, receipt: data, analyzing: false } : log) };
         });
-        save(KEYS.householdTasks, updated);
+
+        // Write to localStorage immediately
+        localStorage.setItem(KEYS.householdTasks, JSON.stringify(updated));
+
+        // Sync to Supabase in background so financial page reads fresh data when opened
+        fetch("/api/push-state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: KEYS.householdTasks, value: updated }),
+        }).then(() => {
+          fireReceiptWebhook({ store: data.store, total: data.total, currency: data.currency, items: data.items, claimNote: data.claimSummary });
+        }).catch(() => {});
+
         return updated;
       });
-      // Trigger n8n workflow 5 — receipt scanned → family notification
-      fireReceiptWebhook({ store: data.store, total: data.total, currency: data.currency, items: data.items, claimNote: data.claimSummary });
-      router.push("/financial");
-    } catch {
+    } catch (err: any) {
       setTasks(prev => prev.map(t => {
         if (t.id !== "groceries") return t;
         return { ...t, logs: t.logs.map(log => log.image === imageUrl ? { ...log, analyzing: false } : log) };
       }));
+      setCameraError(err?.message ?? "Receipt analysis failed. Please try again.");
     }
   };
 
-  useEffect(() => { save(KEYS.householdTasks, tasks); }, [tasks]);
+  useEffect(() => {
+    hydrate().then((data) => {
+      if (data[KEYS.householdTasks]?.length) setTasks(data[KEYS.householdTasks]);
+      setHydrated(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    save(KEYS.householdTasks, tasks);
+  }, [tasks, hydrated]);
 
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
