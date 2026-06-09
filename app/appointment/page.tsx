@@ -10,7 +10,7 @@ import { save, load, hydrate, KEYS } from "@/app/lib/store";
 type Contact = {
   id: string;
   name: string;
-  phone: string;
+  chatId: string;
   relation: string;
 };
 
@@ -59,20 +59,19 @@ export default function AppointmentPage() {
   // --- contacts sheet ---
   const [contactsOpen, setContactsOpen]         = useState(false);
   const [newContactName, setNewContactName]     = useState("");
-  const [newContactPhone, setNewContactPhone]   = useState("");
+  const [newContactChatId, setNewContactChatId] = useState("");
   const [newContactRelation, setNewContactRelation] = useState("");
 
   const addContact = () => {
-    if (!newContactName.trim() || !newContactPhone.trim()) return;
-    const phone = newContactPhone.trim();
+    if (!newContactName.trim() || !newContactChatId.trim()) return;
     const contact: Contact = {
       id: uid(),
       name: newContactName.trim(),
-      phone: phone.startsWith("+") ? phone : `+${phone}`,
+      chatId: newContactChatId.trim(),
       relation: newContactRelation.trim() || "Family",
     };
     setContacts(prev => [...prev, contact]);
-    setNewContactName(""); setNewContactPhone(""); setNewContactRelation("");
+    setNewContactName(""); setNewContactChatId(""); setNewContactRelation("");
   };
 
   const removeContact = (id: string) => {
@@ -103,7 +102,7 @@ export default function AppointmentPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...newAppt,
-            to: contact.phone,
+            to: contact.chatId,
             contactName: contact.name,
           }),
         }).catch(() => {});
@@ -348,7 +347,7 @@ export default function AppointmentPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white truncate">{c.name}</p>
-                        <p className="text-[11px] text-white/40 truncate">{c.relation} · {c.phone}</p>
+                        <p className="text-[11px] text-white/40 truncate">{c.relation} · Telegram {c.chatId}</p>
                       </div>
                       <button
                         onClick={() => removeContact(c.id)}
@@ -372,10 +371,10 @@ export default function AppointmentPage() {
                 />
                 <input
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-yellow-400/50"
-                  placeholder="Phone number (e.g. +60123456789)"
-                  value={newContactPhone}
-                  onChange={e => setNewContactPhone(e.target.value)}
-                  type="tel"
+                  placeholder="Telegram Chat ID (e.g. 1663087310)"
+                  value={newContactChatId}
+                  onChange={e => setNewContactChatId(e.target.value)}
+                  type="number"
                 />
                 <input
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-yellow-400/50"
@@ -491,7 +490,7 @@ export default function AppointmentPage() {
                           </div>
                           <div className="flex-1 text-left">
                             <p className={`text-sm font-semibold ${selected ? "text-yellow-100" : "text-white/70"}`}>{c.name}</p>
-                            <p className="text-[11px] text-white/30">{c.relation} · {c.phone}</p>
+                            <p className="text-[11px] text-white/30">{c.relation} · Telegram {c.chatId}</p>
                           </div>
                         </button>
                       );

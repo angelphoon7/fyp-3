@@ -1,5 +1,5 @@
 {
-  "name": "KAI — Appointment → WhatsApp Family Notify",
+  "name": "KAI — Appointment → Telegram Family Notify",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $('New Appointment Webhook').first().json;\nconst date = new Date(`${d.date}T${d.time}`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });\nconst time = new Date(`${d.date}T${d.time}`).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });\nconst greeting = d.contactName ? `Hi ${d.contactName},` : 'Hello,';\n\nconst message = [\n  greeting,\n  ``,\n  `📅 New appointment has been scheduled:`,\n  ``,\n  `🏥 ${d.hospital}`,\n  `🗓️ ${date}`,\n  `🕐 ${time}`,\n  d.notes ? `📝 ${d.notes}` : null,\n  ``,\n  `— KAI Caregiving App`\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { message, to: d.to } }];"
+        "jsCode": "const d = $('New Appointment Webhook').first().json;\nconst date = new Date(`${d.date}T${d.time}`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });\nconst time = new Date(`${d.date}T${d.time}`).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });\nconst greeting = d.contactName ? `Hi ${d.contactName},` : 'Hello,';\n\nconst message = [\n  greeting,\n  '',\n  '📅 New appointment has been scheduled:',\n  '',\n  `🏥 ${d.hospital}`,\n  `🗓️ ${date}`,\n  `🕐 ${time}`,\n  d.notes ? `📝 ${d.notes}` : null,\n  '',\n  '— KAI Caregiving App'\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { message, chatId: d.to } }];"
       },
       "id": "format-appt-msg",
       "name": "Format Message",
@@ -27,22 +27,19 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.twilio.com/2010-04-01/Accounts/REMOVED_TWILIO_SID/Messages.json",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth",
+        "url": "https://api.telegram.org/botREMOVED_TELEGRAM_TOKEN/sendMessage",
         "sendBody": true,
-        "contentType": "form-urlencoded",
+        "contentType": "json",
         "bodyParameters": {
           "parameters": [
-            { "name": "From", "value": "whatsapp:+14155238886" },
-            { "name": "To", "value": "=whatsapp:{{ $json.to }}" },
-            { "name": "Body", "value": "={{ $json.message }}" }
+            { "name": "chat_id", "value": "={{ $json.chatId }}" },
+            { "name": "text", "value": "={{ $json.message }}" }
           ]
         },
         "options": {}
       },
-      "id": "send-whatsapp-http",
-      "name": "Send WhatsApp to Family",
+      "id": "send-telegram",
+      "name": "Send Telegram to Family",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [680, 300]
@@ -53,7 +50,7 @@
       "main": [[{ "node": "Format Message", "type": "main", "index": 0 }]]
     },
     "Format Message": {
-      "main": [[{ "node": "Send WhatsApp to Family", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Send Telegram to Family", "type": "main", "index": 0 }]]
     }
   },
   "settings": { "executionOrder": "v1" },
