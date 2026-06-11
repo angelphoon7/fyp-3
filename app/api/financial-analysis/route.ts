@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@/whatsapp/genkit";
+import { openai } from "@/whatsapp/openai-client";
 
 export interface FinancialAnalysisResult {
   insight: string;
@@ -40,12 +40,12 @@ Rules:
 - Never say 'I recommend', 'you should', 'consult', 'advise'
 - If a category has no data, say something encouraging like 'Nothing logged here yet!'`;
 
-    const response = await ai.generate({
-      model: "googleai/gemini-2.5-flash",
-      prompt: [{ text: prompt }],
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const raw     = response.text?.trim() ?? "";
+    const raw     = response.choices[0]?.message?.content?.trim() ?? "";
     const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const result  = JSON.parse(jsonStr) as FinancialAnalysisResult;
 

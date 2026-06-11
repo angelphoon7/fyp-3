@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@/whatsapp/genkit";
+import { openai } from "@/whatsapp/openai-client";
 import { analyzeWithCloudVision } from "@/whatsapp/cloud-vision";
 
 export interface NutritionResult {
@@ -45,15 +45,18 @@ Return ONLY a valid JSON object with no markdown or extra text:
 
 All numeric values are estimates per the portion visible in the image. Use typical Malaysian/Asian meal portion sizes as reference.`;
 
-    const response = await ai.generate({
-      model: "googleai/gemini-2.5-flash",
-      prompt: [
-        { media: { url: `data:image/jpeg;base64,${base64}` } },
-        { text: prompt },
-      ],
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
+          { type: "text", text: prompt },
+        ],
+      }],
     });
 
-    const raw      = response.text?.trim() ?? "";
+    const raw      = response.choices[0]?.message?.content?.trim() ?? "";
     const jsonStr  = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const nutrition = JSON.parse(jsonStr) as NutritionResult;
 

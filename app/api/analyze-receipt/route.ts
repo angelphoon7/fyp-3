@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@/whatsapp/genkit";
+import { openai } from "@/whatsapp/openai-client";
 
 export interface ReceiptItem {
   name: string;
@@ -47,15 +47,18 @@ export async function POST(req: NextRequest) {
 
     const base64 = image.includes(",") ? image.split(",")[1] : image;
 
-    const response = await ai.generate({
-      model: "googleai/gemini-2.5-flash",
-      prompt: [
-        { media: { url: `data:image/jpeg;base64,${base64}` } },
-        { text: PROMPT },
-      ],
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
+          { type: "text", text: PROMPT },
+        ],
+      }],
     });
 
-    const raw     = response.text?.trim() ?? "";
+    const raw     = response.choices[0]?.message?.content?.trim() ?? "";
     const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const receipt = JSON.parse(jsonStr) as ReceiptResult;
 

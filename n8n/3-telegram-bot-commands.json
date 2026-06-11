@@ -1,0 +1,65 @@
+{
+  "name": "KAI — Telegram Bot Commands",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "kai-telegram-bot-commands"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/load-state",
+        "options": {}
+      },
+      "id": "fetch-state",
+      "name": "Fetch App State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tgData = $('Telegram Trigger').first().json;\nconst text = (tgData.message && tgData.message.text ? tgData.message.text : '').toLowerCase().trim();\nconst chatId = String(tgData.message && tgData.message.chat ? tgData.message.chat.id : '');\nconst state = $input.first().json;\nconst today = new Date().toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' });\n\nfunction fmt(n) { return (n || 0).toFixed(2); }\n\nfunction healthReport() {\n  const careTasks = state.kai_care_tasks || [];\n  const medications = state.kai_medications || [];\n  const appointments = state.kai_appointments || [];\n  const householdTasks = state.kai_household_tasks || [];\n  const careCompleted = careTasks.filter(function(t) { return t.logs && t.logs.length > 0; }).length;\n  const careTotal = careTasks.length;\n  const medTotal = medications.reduce(function(s, m) { return s + (m.schedules ? m.schedules.length : 0); }, 0);\n  const medTaken = medications.reduce(function(s, m) { return s + (m.schedules ? m.schedules.filter(function(sc) { return sc.taken; }).length : 0); }, 0);\n  const medPct = medTotal > 0 ? Math.round((medTaken / medTotal) * 100) : 0;\n  const houseCompleted = householdTasks.filter(function(t) { return t.logs && t.logs.length > 0; }).length;\n  const houseTotal = householdTasks.length;\n  const now = new Date();\n  const future = appointments.filter(function(a) { return new Date(a.date + 'T' + a.time) >= now; });\n  future.sort(function(a, b) { return a.date.localeCompare(b.date); });\n  const nextAppt = future[0];\n  const overallScore = Math.round((careTotal > 0 ? (careCompleted / careTotal) * 40 : 0) + (medTotal > 0 ? (medPct / 100) * 40 : 0) + (houseTotal > 0 ? (houseCompleted / houseTotal) * 20 : 0));\n  const hasData = careTotal > 0 || medTotal > 0 || appointments.length > 0 || houseTotal > 0;\n  const lines = [\n    '\\u{1F4CA} KAI Health Report \\u2014 ' + today,\n    '',\n    hasData ? 'Overall Score: ' + overallScore + '/100' : 'No data recorded yet',\n    '',\n    careTotal > 0 ? '\\u{1F3E5} Patient Care: ' + careCompleted + '/' + careTotal + ' tasks done' : '\\u{1F3E5} Patient Care: No tasks',\n    medTotal > 0 ? '\\u{1F48A} Medication: ' + medPct + '% (' + medTaken + '/' + medTotal + ' doses taken)' : '\\u{1F48A} Medication: No medications',\n    nextAppt ? '\\u{1F4C5} Next Appointment: ' + nextAppt.hospital + ' \\u2014 ' + nextAppt.date : '\\u{1F4C5} No upcoming appointments',\n    houseTotal > 0 ? '\\u{1F3E0} Household: ' + houseCompleted + '/' + houseTotal + ' tasks done' : '\\u{1F3E0} Household: No tasks',\n    '',\n    '\\u2014 KAI Caregiving App'\n  ];\n  return lines.join('\\n');\n}\n\nfunction financialReport() {\n  const householdTasks = state.kai_household_tasks || [];\n  const appointments = state.kai_appointments || [];\n  let groceryTotal = 0;\n  let medicalTotal = 0;\n  const groceryLines = [];\n  const medicalLines = [];\n  const groceries = householdTasks.find(function(t) { return t.id === 'groceries'; });\n  if (groceries && groceries.logs) {\n    groceries.logs.forEach(function(log) {\n      if (!log.receipt) return;\n      groceryTotal += log.receipt.total || 0;\n      groceryLines.push('  \\u2022 ' + (log.receipt.store || 'Grocery') + ' \\u2014 ' + (log.receipt.currency || 'MYR') + ' ' + fmt(log.receipt.total));\n    });\n  }\n  appointments.forEach(function(a) {\n    if (!a.doc || !a.doc.report) return;\n    const r = a.doc.report;\n    medicalTotal += r.total || 0;\n    medicalLines.push('  \\u2022 ' + (r.hospital || a.hospital) + ' \\u2014 ' + (r.currency || 'MYR') + ' ' + fmt(r.total));\n  });\n  const grandTotal = groceryTotal + medicalTotal;\n  const lines = [\n    '\\u{1F4B0} KAI Financial Report \\u2014 ' + today,\n    '',\n    'Total Expenses: MYR ' + fmt(grandTotal),\n    '  \\u{1F6D2} Groceries: MYR ' + fmt(groceryTotal),\n    '  \\u{1F3E5} Medical: MYR ' + fmt(medicalTotal)\n  ];\n  if (groceryLines.length > 0) { lines.push(''); lines.push('Grocery receipts:'); groceryLines.forEach(function(l) { lines.push(l); }); }\n  if (medicalLines.length > 0) { lines.push(''); lines.push('Medical receipts:'); medicalLines.forEach(function(l) { lines.push(l); }); }\n  lines.push('');\n  lines.push('\\u2014 KAI Caregiving App');\n  return lines.join('\\n');\n}\n\nfunction helpMessage() {\n  return [\n    '\\u{1F916} KAI Bot \\u2014 Commands',\n    '',\n    '\\u{1F4CA} health \\u2014 Health & care report',\n    '\\u{1F4B0} financial \\u2014 Expense report',\n    '',\n    'Just type a keyword and I will send you the latest report.',\n    '',\n    '\\u2014 KAI Caregiving App'\n  ].join('\\n');\n}\n\nlet message;\nif (text.includes('health') || text.includes('care') || (text.includes('report') && !text.includes('financial') && !text.includes('expense'))) {\n  message = healthReport();\n} else if (text.includes('financial') || text.includes('finance') || text.includes('expense') || text.includes('money') || text.includes('cost')) {\n  message = financialReport();\n} else {\n  message = helpMessage();\n}\n\nreturn [{ json: { message: message, chatId: chatId } }];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "send-response",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Fetch App State", "type": "main", "index": 0 }]]
+    },
+    "Fetch App State": {
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+    },
+    "Format Response": {
+      "main": [[{ "node": "Send Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}

@@ -37,16 +37,8 @@ export default function AppointmentPage() {
   const router = useRouter();
 
   const [hydrated, setHydrated] = useState(false);
-  const [appointments, setAppointments] = useState<Appointment[]>(() => load(KEYS.appointments, [
-    {
-      id: uid(),
-      hospital: "Hospital Kuala Lumpur",
-      date: "2026-05-10",
-      time: "09:30",
-      notes: "Follow-up for blood pressure",
-    },
-  ]));
-  const [contacts, setContacts] = useState<Contact[]>(() => load(KEYS.contacts, []));
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
 
   // --- add appointment sheet ---
   const [addOpen, setAddOpen]         = useState(false);
@@ -218,6 +210,11 @@ export default function AppointmentPage() {
   };
 
   useEffect(() => {
+    const localAppts = load(KEYS.appointments, []);
+    const localContacts = load(KEYS.contacts, []);
+    if (localAppts.length) setAppointments(localAppts);
+    if (localContacts.length) setContacts(localContacts);
+
     hydrate().then((data) => {
       if (data[KEYS.appointments]?.length) setAppointments(data[KEYS.appointments]);
       if (data[KEYS.contacts]?.length)     setContacts(data[KEYS.contacts]);
@@ -252,8 +249,8 @@ export default function AppointmentPage() {
     return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
   };
 
-  const upcoming = appointments.filter(a => new Date(a.date + "T" + a.time) >= new Date()).sort((a, b) => a.date.localeCompare(b.date));
-  const past     = appointments.filter(a => new Date(a.date + "T" + a.time) < new Date());
+  const upcoming = hydrated ? appointments.filter(a => new Date(a.date + "T" + a.time) >= new Date()).sort((a, b) => a.date.localeCompare(b.date)) : appointments;
+  const past     = hydrated ? appointments.filter(a => new Date(a.date + "T" + a.time) < new Date()) : [];
 
   return (
     <IPhone13Frame>
@@ -335,7 +332,7 @@ export default function AppointmentPage() {
             >
               <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
               <p className="text-sm font-bold text-white text-center">Family Contacts</p>
-              <p className="text-[11px] text-white/40 text-center -mt-2">These contacts will receive WhatsApp notifications</p>
+              <p className="text-[11px] text-white/40 text-center -mt-2">These contacts will receive Telegram notifications</p>
 
               {/* Existing contacts */}
               {contacts.length > 0 && (
@@ -384,7 +381,7 @@ export default function AppointmentPage() {
                 />
                 <button
                   onClick={addContact}
-                  disabled={!newContactName.trim() || !newContactPhone.trim()}
+                  disabled={!newContactName.trim() || !newContactChatId.trim()}
                   className="w-full py-3 rounded-xl bg-yellow-400 text-black font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Add Contact
@@ -452,7 +449,7 @@ export default function AppointmentPage() {
               {/* Notify section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Notify via WhatsApp</label>
+                  <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Notify via Telegram</label>
                   <button
                     onClick={(e) => { e.stopPropagation(); setAddOpen(false); setContactsOpen(true); }}
                     className="text-[11px] text-yellow-400 font-bold"
@@ -545,8 +542,8 @@ export default function AppointmentPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-300"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                  <span className="text-[11px] text-yellow-300 font-bold">
-                    Contacts {contacts.length > 0 && `(${contacts.length})`}
+                  <span className="text-[11px] text-yellow-300 font-bold" suppressHydrationWarning>
+                    Contacts {hydrated && contacts.length > 0 && `(${contacts.length})`}
                   </span>
                 </button>
               </div>
@@ -557,7 +554,7 @@ export default function AppointmentPage() {
                 {upcoming.length > 0 && (
                   <div className="space-y-3">
                     <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Upcoming</p>
-                    {upcoming.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={setPickerApptId} formatDate={formatDate} formatTime={formatTime} />)}
+                    {upcoming.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={setPickerApptId} formatDate={formatDate} formatTime={formatTime} isPast={false} />)}
                   </div>
                 )}
 
@@ -565,7 +562,7 @@ export default function AppointmentPage() {
                 {past.length > 0 && (
                   <div className="space-y-3">
                     <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Past Visits</p>
-                    {past.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={setPickerApptId} formatDate={formatDate} formatTime={formatTime} />)}
+                    {past.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={setPickerApptId} formatDate={formatDate} formatTime={formatTime} isPast={true} />)}
                   </div>
                 )}
 
@@ -596,15 +593,15 @@ export default function AppointmentPage() {
 
 // --- appointment card sub-component ---
 function AppointmentCard({
-  appt, onDelete, onScanReceipt, formatDate, formatTime,
+  appt, onDelete, onScanReceipt, formatDate, formatTime, isPast,
 }: {
   appt: Appointment;
   onDelete: (id: string) => void;
   onScanReceipt: (id: string) => void;
   formatDate: (d: string) => string;
   formatTime: (t: string) => string;
+  isPast: boolean;
 }) {
-  const isPast = new Date(appt.date + "T" + appt.time) < new Date();
 
   return (
     <div className={`rounded-xl border overflow-hidden shadow-lg backdrop-blur-sm ${isPast ? "bg-white/5 border-white/10" : "bg-yellow-400/10 border-yellow-400/30"}`}>

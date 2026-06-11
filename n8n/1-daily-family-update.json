@@ -37,15 +37,15 @@
     },
     {
       "parameters": {
-        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
-        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
-        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
-        "to":         "whatsapp:={{ $env.FAMILY_PHONE }}",
-        "message":    "={{ $json.message }}"
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.FAMILY_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
       },
-      "id": "send-whatsapp",
+      "id": "send-telegram",
       "name": "Send to Family",
-      "type": "n8n-nodes-base.twilio",
+      "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
       "position": [900, 300]
     }

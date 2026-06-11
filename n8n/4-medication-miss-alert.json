@@ -59,15 +59,15 @@
     },
     {
       "parameters": {
-        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
-        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
-        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
-        "to":         "whatsapp:={{ $env.CAREGIVER_PHONE }}",
-        "message":    "={{ $json.message }}"
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.CAREGIVER_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
       },
       "id": "alert-caregiver",
       "name": "Nudge Caregiver",
-      "type": "n8n-nodes-base.twilio",
+      "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
       "position": [1340, 220]
     }

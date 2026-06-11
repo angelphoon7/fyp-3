@@ -101,6 +101,13 @@ export default function FinancialPage() {
   const [genError,    setGenError]    = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
+  const [contacts,           setContacts]           = useState<{id:string;name:string;chatId:string;relation:string}[]>([]);
+  const [sendOpen,           setSendOpen]           = useState(false);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [sending,            setSending]            = useState(false);
+  const [sent,               setSent]               = useState(false);
+  const [sendError,          setSendError]          = useState<string | null>(null);
+
   useEffect(() => {
     // Load from localStorage immediately, then sync from Supabase
     const fromLocal = buildTransactions(
@@ -109,10 +116,14 @@ export default function FinancialPage() {
     );
     if (fromLocal.length > 0) setTransactions(fromLocal);
 
+    const localContacts = load<{id:string;name:string;chatId:string;relation:string}[]>(KEYS.contacts, []);
+    if (localContacts.length) setContacts(localContacts);
+
     hydrate().then((remote) => {
       const householdTasks = remote[KEYS.householdTasks] ?? load<HouseTask[]>(KEYS.householdTasks, []);
       const appointments   = remote[KEYS.appointments]   ?? load<Appointment[]>(KEYS.appointments, []);
       setTransactions(buildTransactions(householdTasks, appointments));
+      if (remote[KEYS.contacts]?.length) setContacts(remote[KEYS.contacts]);
     });
   }, []);
 
@@ -122,6 +133,45 @@ export default function FinancialPage() {
   const medicalTotal = medicalTxns.reduce((s, t) => s + t.amount, 0);
   const grandTotal   = groceryTotal + medicalTotal;
   const hasData      = transactions.length > 0;
+
+  // ── Send to Family ────────────────────────────────────────────────────────
+
+  const sendToFamily = async () => {
+    if (!selectedContactIds.length) return;
+    setSending(true);
+    const today = new Date().toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" });
+    const groceryLines = groceryTxns.map(t => `  • ${t.title} — ${t.currency} ${fmt(t.amount)}`).join("\n");
+    const medicalLines = medicalTxns.map(t => `  • ${t.title} — ${t.currency} ${fmt(t.amount)}`).join("\n");
+    const lines = [
+      `💰 KAI Financial Report — ${today}`,
+      "",
+      `Total Spending: MYR ${fmt(grandTotal)}`,
+      `  🛒 Groceries: MYR ${fmt(groceryTotal)}`,
+      `  🏥 Medical: MYR ${fmt(medicalTotal)}`,
+      groceryLines ? `\nGrocery receipts:\n${groceryLines}` : null,
+      medicalLines ? `\nMedical receipts:\n${medicalLines}` : null,
+      "",
+      "— KAI Caregiving App",
+    ].filter(Boolean);
+    const message = lines.join("\n");
+    const chatIds = contacts.filter(c => selectedContactIds.includes(c.id)).map(c => c.chatId);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/send-telegram-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatIds, message }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to send");
+      setSent(true);
+      setTimeout(() => { setSent(false); setSendOpen(false); setSelectedContactIds([]); setSendError(null); }, 1500);
+    } catch (e: any) {
+      setSendError(e.message ?? "Failed to send");
+    } finally {
+      setSending(false);
+    }
+  };
 
   // ── AI analysis ───────────────────────────────────────────────────────────
 
@@ -292,6 +342,40 @@ export default function FinancialPage() {
     <IPhone13Frame>
       <div className="relative h-dvh w-full flex-1 overflow-hidden bg-black text-white font-sans">
 
+        {/* Send to Family sheet */}
+        {sendOpen && (
+          <div className="absolute inset-0 z-50 flex items-end" onClick={() => setSendOpen(false)}>
+            <div className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
+              <p className="text-sm font-bold text-white text-center">Send Financial Report</p>
+              <p className="text-[11px] text-white/40 text-center -mt-2">Select contacts to notify via Telegram</p>
+              <div className="space-y-2">
+                {contacts.map(c => {
+                  const selected = selectedContactIds.includes(c.id);
+                  return (
+                    <button key={c.id} onClick={() => setSelectedContactIds(prev => prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id])}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${selected ? "bg-blue-500/10 border-blue-500/30" : "bg-white/5 border-white/10"}`}>
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold ${selected ? "bg-blue-400 text-white" : "bg-white/10 text-white/50"}`}>
+                        {selected ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : c.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className={`text-sm font-semibold ${selected ? "text-blue-100" : "text-white/70"}`}>{c.name}</p>
+                        <p className="text-[11px] text-white/30">{c.relation} · Telegram {c.chatId}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {sendError && <p className="text-xs text-red-400 text-center">{sendError}</p>}
+              <button onClick={sendToFamily} disabled={!selectedContactIds.length || sending || sent}
+                className="w-full py-3 rounded-xl bg-blue-500 text-white font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-opacity">
+                {sent ? "✓ Sent!" : sending ? "Sending…" : selectedContactIds.length > 0 ? `Send to ${selectedContactIds.length} contact${selectedContactIds.length !== 1 ? "s" : ""}` : "Select a contact"}
+              </button>
+              <button onClick={() => setSendOpen(false)} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm">Cancel</button>
+            </div>
+          </div>
+        )}
+
         <div className="absolute inset-0 bg-[#0a0a0a]" />
         <PixelSnow color="#ffffff" flakeSize={0.015} minFlakeSize={1.0} density={0.35} speed={0.8} variant="round" className="opacity-40 mix-blend-screen" />
         <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[50%] rounded-full bg-emerald-500/10 blur-[120px] mix-blend-screen pointer-events-none" />
@@ -318,18 +402,29 @@ export default function FinancialPage() {
                 <p className="text-white/40 text-[9px] font-semibold tracking-[0.22em] uppercase mb-0.5">Financial</p>
                 <h1 className="text-[20px] font-bold tracking-tight text-white leading-none">Overview</h1>
               </div>
-              <button
-                onClick={downloadPDF}
-                disabled={!hasData || downloading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-emerald-400 text-[11px] font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}
-              >
-                {downloading
-                  ? <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                }
-                {downloading ? "Generating…" : "Export PDF"}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => { setSendOpen(true); setSent(false); }}
+                  disabled={!hasData || !contacts.length}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-blue-300 text-[11px] font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)' }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 3 2 12l7 3"/><path d="m9 15 5 7 8-19"/></svg>
+                  Share
+                </button>
+                <button
+                  onClick={downloadPDF}
+                  disabled={!hasData || downloading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-emerald-400 text-[11px] font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}
+                >
+                  {downloading
+                    ? <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  }
+                  {downloading ? "Generating…" : "PDF"}
+                </button>
+              </div>
             </div>
           </div>
 

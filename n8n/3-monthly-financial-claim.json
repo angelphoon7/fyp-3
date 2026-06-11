@@ -72,15 +72,15 @@
     },
     {
       "parameters": {
-        "accountSid": "={{ $env.TWILIO_ACCOUNT_SID }}",
-        "authToken":  "={{ $env.TWILIO_AUTH_TOKEN }}",
-        "from":       "whatsapp:={{ $env.TWILIO_WHATSAPP_NUMBER }}",
-        "to":         "whatsapp:={{ $env.FAMILY_PHONE }}",
-        "message":    "=✅ Monthly expense report sent!\n\nTotal this month: RM {{ $('Build Email HTML').first().json.grandTotal.toFixed(2) }}\n\nCheck your email for the full breakdown. All receipts are included — ready to claim. 🧾"
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.FAMILY_CHAT_ID }}",
+        "text": "=✅ Monthly expense report sent!\n\nTotal this month: RM {{ $('Build Email HTML').first().json.grandTotal.toFixed(2) }}\n\nCheck your email for the full breakdown. All receipts are included — ready to claim. 🧾",
+        "additionalFields": {}
       },
-      "id": "confirm-whatsapp",
-      "name": "WhatsApp Confirmation",
-      "type": "n8n-nodes-base.twilio",
+      "id": "confirm-telegram",
+      "name": "Telegram Confirmation",
+      "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
       "position": [1340, 360]
     }
@@ -90,7 +90,7 @@
     "Check Last Day of Month":{ "main": [[{ "node": "Is Last Day?",            "type": "main", "index": 0 }]] },
     "Is Last Day?":           { "main": [[{ "node": "Get Financial Data",       "type": "main", "index": 0 }]], "main_1": [] },
     "Get Financial Data":     { "main": [[{ "node": "Build Email HTML",         "type": "main", "index": 0 }]] },
-    "Build Email HTML":       { "main": [[{ "node": "Send Claim Email",         "type": "main", "index": 0 }, { "node": "WhatsApp Confirmation", "type": "main", "index": 0 }]] }
+    "Build Email HTML":       { "main": [[{ "node": "Send Claim Email",         "type": "main", "index": 0 }, { "node": "Telegram Confirmation", "type": "main", "index": 0 }]] }
   },
   "settings": { "executionOrder": "v1" },
   "tags": [{ "name": "KAI" }]

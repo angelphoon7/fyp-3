@@ -16,7 +16,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const d = $('New Appointment Webhook').first().json;\nconst date = new Date(`${d.date}T${d.time}`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });\nconst time = new Date(`${d.date}T${d.time}`).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });\nconst greeting = d.contactName ? `Hi ${d.contactName},` : 'Hello,';\n\nconst message = [\n  greeting,\n  '',\n  '📅 New appointment has been scheduled:',\n  '',\n  `🏥 ${d.hospital}`,\n  `🗓️ ${date}`,\n  `🕐 ${time}`,\n  d.notes ? `📝 ${d.notes}` : null,\n  '',\n  '— KAI Caregiving App'\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { message, chatId: d.to } }];"
+        "jsCode": "const raw = $('New Appointment Webhook').first().json;\nconst d = raw.body ?? raw;\nconst date = new Date(`${d.date}T${d.time}`).toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });\nconst time = new Date(`${d.date}T${d.time}`).toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });\nconst greeting = d.contactName ? `Hi ${d.contactName},` : 'Hello,';\n\nconst message = [\n  greeting,\n  '',\n  '📅 New appointment has been scheduled:',\n  '',\n  `🏥 ${d.hospital}`,\n  `🗓️ ${date}`,\n  `🕐 ${time}`,\n  d.notes ? `📝 ${d.notes}` : null,\n  '',\n  '— KAI Caregiving App'\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { message, chatId: String(d.to) } }];"
       },
       "id": "format-appt-msg",
       "name": "Format Message",
@@ -26,22 +26,16 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.telegram.org/botREMOVED_TELEGRAM_TOKEN/sendMessage",
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            { "name": "chat_id", "value": "={{ $json.chatId }}" },
-            { "name": "text", "value": "={{ $json.message }}" }
-          ]
-        },
-        "options": {}
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
       },
       "id": "send-telegram",
       "name": "Send Telegram to Family",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
       "position": [680, 300]
     }
   ],

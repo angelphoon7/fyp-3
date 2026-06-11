@@ -676,15 +676,15 @@ In a one-to-one relationship, a single entity is associated with exactly one oth
 
 #### 4.5.1.1 Application in the System
 
-- **User ↔ UserProfile (WhatsApp Onboarding)**
-  Each registered caregiver login account is linked to exactly one WhatsApp onboarding profile. The UserProfile holds caregiving context (patient name, condition, check-in time) that extends the basic login credentials stored in the User entity.
+- **User ↔ UserProfile (Telegram Onboarding)**
+  Each registered caregiver login account is linked to exactly one Telegram onboarding profile. The UserProfile holds caregiving context (patient name, condition, check-in time, family Telegram ID) that extends the basic login credentials stored in the User entity.
 
 - **Appointment ↔ AppointmentDoc**
   Each medical appointment record may have exactly one scanned document attached. The AppointmentDoc stores the raw image and AI-extracted report data (hospital, diagnosis, cost items) tied exclusively to that single appointment.
 
 #### 4.5.1.2 Business Significance
 
-- Ensures each caregiver's WhatsApp profile is personalised and not shared, protecting caregiver-patient confidentiality.
+- Ensures each caregiver's Telegram profile is personalised and not shared, protecting caregiver-patient confidentiality.
 - Prevents duplicate document records for a single appointment, keeping the financial report accurate.
 - Simplifies navigation — viewing an appointment always leads to one clear document, with no ambiguity.
 
@@ -706,13 +706,13 @@ In a one-to-many relationship, a single entity on side A is associated with mult
   One household task (e.g., Grocery Shopping, Cooking) can have many logged events, each optionally attaching a scanned receipt for financial tracking.
 
 - **UserProfile → CheckIn**
-  One caregiver user accumulates many daily WhatsApp check-in records over time. Each CheckIn document captures the medication response, meal response, vital reading, and any concerns raised on a specific date.
+  One caregiver user accumulates many daily Telegram check-in records over time. Each CheckIn document captures the medication response, meal response, vital reading, and any concerns raised on a specific date.
 
 - **CommunityPost → Comment**
   One community post can receive many comments from different caregivers. This enables discussion threads on shared caregiver experiences and shift-related topics.
 
 - **ShiftRequest → ShiftResponse**
-  One open shift request posted by a caregiver can attract many responses from available caregivers, each with their experience level, rating, and offered fee.
+  One open shift request posted by a caregiver can attract many responses from available caregivers, each with their experience level and offered fee.
 
 #### 4.5.2.2 Business Significance
 
@@ -730,13 +730,13 @@ In a many-to-many relationship, entities on both sides can be associated with mu
 #### 4.5.3.1 Application in the System
 
 - **Patient ↔ FamilyMember (via FamilyAccess)**
-  A patient may be monitored by multiple family members, and a family member may (in future) be associated with more than one patient. The FamilyAccess entity acts as the junction, storing the patientId and the familyPhone, linking both parties without duplicating patient data. Family members use the patientId from the onboarding form to gain read access to the patient's care summary via WhatsApp.
+  A patient may be monitored by multiple family members, and a family member may (in future) be associated with more than one patient. The FamilyAccess entity acts as the junction, storing the patientId and the familyTelegramId, linking both parties without duplicating patient data. Family members use the patientId from the onboarding form to gain read access to the patient's care summary via Telegram.
 
 #### 4.5.3.2 Business Significance
 
 - Decouples family member access from the caregiver's primary account, enabling extended family visibility without granting editing permissions.
 - The FamilyAccess junction preserves data integrity — changes to a patient's profile do not require updating multiple family member records.
-- Supports scalable family involvement: as more relatives register with the patientId, each receives the same automated daily WhatsApp updates without modifying the core caregiving workflow.
+- Supports scalable family involvement: as more relatives register with the patientId, each receives the same automated daily Telegram updates without modifying the core caregiving workflow.
 
 ---
 
@@ -815,7 +815,7 @@ entity "UserProfile" as UPROF {
   medications : TEXT
   checkInTime : VARCHAR(100)
   familyName : VARCHAR(100)
-  familyPhone : VARCHAR(20)
+  familyTelegramId : VARCHAR(50)
   onboarded : BOOLEAN
   step : INT
 }
@@ -1002,7 +1002,6 @@ entity "ShiftResponse" as SRSP {
   --
   name : VARCHAR(100)
   experience : VARCHAR(20)
-  rating : DECIMAL(3,1)
   avatar : VARCHAR(255)
   fee : VARCHAR(20)
 }

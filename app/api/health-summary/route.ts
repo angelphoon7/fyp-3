@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@/whatsapp/genkit";
+import { openai } from "@/whatsapp/openai-client";
 
 export interface MealRecommendation {
   name: string;
@@ -84,12 +84,12 @@ Rules:
 - Meal names must be in plain English so they can be searched in a food database (e.g. "Steamed Fish", "Pumpkin Soup", "Oatmeal Porridge")
 - Write as if texting a caring friend, not writing a report`;
 
-    const response = await ai.generate({
-      model: "googleai/gemini-2.5-flash",
-      prompt: [{ text: prompt }],
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
     });
 
-    const raw     = response.text?.trim() ?? "";
+    const raw     = response.choices[0]?.message?.content?.trim() ?? "";
     const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     const parsed  = JSON.parse(jsonStr) as Omit<HealthSummaryResult, "meals"> & {
       meals: Omit<MealRecommendation, "imageUrl">[];
