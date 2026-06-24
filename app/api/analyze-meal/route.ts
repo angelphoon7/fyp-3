@@ -3,6 +3,7 @@ import { openai } from "@/whatsapp/openai-client";
 import { analyzeWithCloudVision } from "@/whatsapp/cloud-vision";
 
 export interface NutritionResult {
+  isMeal: boolean;
   foods: string[];
   calories: number;
   protein: number;
@@ -30,10 +31,15 @@ export async function POST(req: NextRequest) {
       // non-fatal
     }
 
-    const prompt = `You are a nutrition analysis assistant. Analyze this meal photo and estimate its nutritional content.
-${visionLabels ? `\nGoogle Cloud Vision identified: ${visionLabels}\n` : ""}
+    const prompt = `You are a nutrition analysis assistant.
+${visionLabels ? `Google Cloud Vision identified: ${visionLabels}\n` : ""}
+STEP 1 — Classify: Is this image a photo of a cooked meal, plated food, or food dish? Set "isMeal" to true for prepared/cooked food. Set it to false for receipts, documents, raw ingredients only, objects, scenery, people without food, etc.
+
+STEP 2 — If isMeal is true, estimate nutritional content. If false, set all numbers to 0 and leave foods/summary empty.
+
 Return ONLY a valid JSON object with no markdown or extra text:
 {
+  "isMeal": true,
   "foods": ["food item 1", "food item 2"],
   "calories": 450,
   "protein": 25,

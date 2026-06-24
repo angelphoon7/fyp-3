@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/whatsapp/openai-client";
-import { GoogleAuth } from "google-auth-library";
 
-const VISION_API = "https://vision.googleapis.com/v1/images:annotate";
-
-let _authClient: any = null;
-
-async function getAccessToken(): Promise<string> {
-  if (!_authClient) {
-    const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
-    _authClient = await auth.getClient();
-  }
-  const token = await _authClient.getAccessToken();
-  if (!token.token) throw new Error("Failed to get access token");
-  return token.token;
-}
+export const maxDuration = 60;
 
 export interface ReportLineItem {
   description: string;
@@ -22,9 +9,9 @@ export interface ReportLineItem {
 }
 
 export interface MedicalReportResult {
+  isMedicalReceipt: boolean;
   hospital: string;
   patientName: string;
-  visitDate: string;
   items: ReportLineItem[];
   subtotal: number;
   tax: number;
@@ -41,41 +28,17 @@ export async function POST(req: NextRequest) {
 
     const base64 = image.includes(",") ? image.split(",")[1] : image;
 
-    // DOCUMENT_TEXT_DETECTION for accurate medical receipt OCR
-    const token = await getAccessToken();
-    const visionRes = await fetch(VISION_API, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        requests: [{
-          image: { content: base64 },
-          features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-        }],
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
+    const prompt = `You are a medical billing analyst. Examine this image carefully.
 
-    if (!visionRes.ok) {
-      const body = await visionRes.text().catch(() => "");
-      throw new Error(`Cloud Vision error: ${body.substring(0, 150)}`);
-    }
+STEP 1 — Classify: Is this a medical receipt, hospital bill, clinic invoice, pharmacy receipt, or any official medical/healthcare billing document? Set "isMedicalReceipt" to true ONLY for these. Set it to false for food photos, grocery receipts, restaurant bills, selfies, scenery, or any non-medical document.
 
-    const visionData = await visionRes.json();
-    const rawText: string =
-      visionData.responses?.[0]?.fullTextAnnotation?.text ??
-      visionData.responses?.[0]?.textAnnotations?.[0]?.description ??
-      "";
-
-    const prompt = `You are a medical billing analyst. Parse this hospital receipt or medical report and return structured JSON for an insurance/family expense claim.
-
-OCR TEXT:
-${rawText || "(no text extracted — analyze the image directly)"}
+STEP 2 — If isMedicalReceipt is true, extract the billing details. If false, leave all other fields as empty/zero.
 
 Return ONLY valid JSON with no markdown or extra text:
 {
+  "isMedicalReceipt": true,
   "hospital": "Hospital or clinic name, or Unknown",
   "patientName": "Patient name if visible, or empty string",
-  "visitDate": "YYYY-MM-DD or empty string",
   "items": [
     { "description": "Consultation Fee", "amount": 50.00 },
     { "description": "Lab Test - Blood Panel", "amount": 120.00 }
@@ -85,13 +48,12 @@ Return ONLY valid JSON with no markdown or extra text:
   "total": 0.00,
   "currency": "MYR",
   "diagnosis": "Brief diagnosis or reason for visit if mentioned, or empty string",
-  "claimSummary": "2-3 sentence professional claim note suitable for family reimbursement or insurance submission, mentioning hospital, total cost, and nature of visit"
+  "claimSummary": "2-3 sentence professional claim note suitable for family reimbursement or insurance submission"
 }
 
 Rules:
 - All amounts as numbers
 - currency defaults to MYR unless clearly stated otherwise
-- If items are unclear, list what you can identify from the image
 - claimSummary must be professional and concise`;
 
     const response = await openai.chat.completions.create({

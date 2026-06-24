@@ -13,7 +13,8 @@ export default function HomeDashboard() {
   const [activeTab, setActiveTab] = useState("home");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isShiftRequestsModalOpen, setIsShiftRequestsModalOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<{ caregiverName?: string; patientName?: string } | null>(null);
+  const [isPatientInfoOpen, setIsPatientInfoOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<{ caregiverName?: string; patientName?: string; patientAge?: string; mainCondition?: string; medications?: string } | null>(null);
 
   React.useEffect(() => {
     try {
@@ -28,19 +29,22 @@ export default function HomeDashboard() {
       id: 1,
       date: "Today, 8:00 PM - 2:00 AM",
       patient: "Grandma Rose",
+      status: "confirmed",
+      responses: [
+        { id: 101, name: "Natasha", experience: "5 yrs", rating: 4.9, avatar: "/malay_caregiver.webp", fee: "$25/hr" },
+        { id: 102, name: "Mei Ling", experience: "8 yrs", rating: 5.0, avatar: "/aunty.avif", fee: "$30/hr" }
+      ],
+      selectedCaregiver: 101 as number | null
+    },
+    {
+      id: 4,
+      date: "Sun, 8:00 AM - 2:00 PM",
+      patient: "Uncle Razif",
       status: "responses",
       responses: [
         { id: 101, name: "Natasha", experience: "5 yrs", rating: 4.9, avatar: "/malay_caregiver.webp", fee: "$25/hr" },
         { id: 102, name: "Mei Ling", experience: "8 yrs", rating: 5.0, avatar: "/aunty.avif", fee: "$30/hr" }
       ],
-      selectedCaregiver: null as number | null
-    },
-    {
-      id: 2,
-      date: "Tomorrow, 9:00 AM - 5:00 PM",
-      patient: "Grandpa Joe",
-      status: "pending",
-      responses: [],
       selectedCaregiver: null as number | null
     }
   ]);
@@ -245,10 +249,9 @@ export default function HomeDashboard() {
                 <span className="text-[11px] text-white/75">Shift Requests</span>
                 <span className="text-[9px] font-bold bg-yellow-400 text-black px-1.5 py-0.5 rounded">{shiftRequests.length}</span>
               </button>
-              <div className="h-px bg-white/10 mx-2" />
-              {["Account Details", "Edit Patient Info", "Settings"].map(label => (
-                <button key={label} className="w-full text-left px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/8 hover:text-white transition-colors">{label}</button>
-              ))}
+              <button onClick={() => { setIsProfileOpen(false); setIsPatientInfoOpen(true); }} className="w-full text-left px-3 py-1.5 text-[11px] text-white/75 hover:bg-white/8 transition-colors">
+                Patient Information
+              </button>
               <div className="h-px bg-white/10 mx-2" />
               <button className="w-full text-left px-3 py-1.5 text-[11px] text-red-400/75 hover:bg-red-500/10 transition-colors">Log Out</button>
             </div>
@@ -331,13 +334,6 @@ export default function HomeDashboard() {
                                 </div>
                                 <div>
                                   <p className="text-sm font-medium text-white">{caregiver.name}</p>
-                                  <div className="flex items-center gap-2 text-[10px] text-white/50 mt-0.5">
-                                    <span className="flex items-center"><svg className="w-3 h-3 text-yellow-400 mr-0.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>{caregiver.rating}</span>
-                                    <span>•</span>
-                                    <span>{caregiver.experience}</span>
-                                    <span>•</span>
-                                    <span>{caregiver.fee}</span>
-                                  </div>
                                 </div>
                               </div>
                               <button 
@@ -359,6 +355,33 @@ export default function HomeDashboard() {
                         <p className="text-xs text-white/40 mt-1">Caregivers in your community will be notified</p>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Patient Information Modal */}
+        {isPatientInfoOpen && (
+          <div className="absolute inset-0 z-[100] flex items-end justify-center">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsPatientInfoOpen(false)} />
+            <div className="relative w-full bg-[#111] rounded-t-3xl border-t border-white/10 shadow-2xl animate-in slide-in-from-bottom-full duration-300 pb-10">
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mt-3 mb-4" />
+              <div className="px-5 pb-2 flex items-center justify-between">
+                <p className="text-sm font-bold text-white">Patient Information</p>
+                <button onClick={() => setIsPatientInfoOpen(false)} className="text-white/40 hover:text-white/70 text-xs">Done</button>
+              </div>
+              <div className="px-5 space-y-3 mt-2">
+                {[
+                  { label: "Patient Name", value: userProfile?.patientName },
+                  { label: "Age", value: userProfile?.patientAge },
+                  { label: "Condition", value: userProfile?.mainCondition },
+                  { label: "Medications", value: userProfile?.medications },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                    <p className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-1">{label}</p>
+                    <p className="text-sm text-white">{value || "—"}</p>
                   </div>
                 ))}
               </div>

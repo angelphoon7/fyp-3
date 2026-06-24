@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import ReflectiveCard from "@/app/patient_caring/ReflectiveCard";
 import type { MedicalReportResult } from "@/app/api/analyze-medical-report/route";
 import { save, load, hydrate, KEYS } from "@/app/lib/store";
+import { ScrollPickerColumn, PICKER_H } from "@/components/ScrollPickerColumn";
 
 type Contact = {
   id: string;
@@ -18,6 +19,8 @@ type AppointmentDoc = {
   image: string;
   report?: MedicalReportResult;
   analyzing: boolean;
+  error?: string;
+  scannedAt?: string; // YYYY-MM-DD when the receipt was uploaded
 };
 
 type Appointment = {
@@ -47,6 +50,48 @@ export default function AppointmentPage() {
   const [newTime, setNewTime]         = useState("09:00");
   const [newNotes, setNewNotes]       = useState("");
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
+  // --- scroll pickers ---
+  const MONTHS   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const MONTH_KEYS = ["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const YEARS    = Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear() + i));
+  const HOURS    = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+  const MINUTES  = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
+
+  const [datePicker, setDatePicker] = useState<{ day: string; month: string; year: string } | null>(null);
+  const [timePicker, setTimePicker] = useState<{ hour: string; minute: string } | null>(null);
+
+  const openDatePicker = () => {
+    const today = new Date();
+    if (newDate) {
+      const [y, m, d] = newDate.split("-");
+      setDatePicker({ year: y, month: m, day: d });
+    } else {
+      setDatePicker({
+        year: String(today.getFullYear()),
+        month: String(today.getMonth() + 1).padStart(2, "0"),
+        day:   String(today.getDate()).padStart(2, "0"),
+      });
+    }
+  };
+
+  const confirmDate = () => {
+    if (!datePicker) return;
+    setNewDate(`${datePicker.year}-${datePicker.month}-${datePicker.day}`);
+    setDatePicker(null);
+  };
+
+  const openTimePicker = () => {
+    const [h, m] = newTime.split(":");
+    const snapped = MINUTES.reduce((p, c) => Math.abs(Number(c) - Number(m)) < Math.abs(Number(p) - Number(m)) ? c : p);
+    setTimePicker({ hour: h, minute: snapped });
+  };
+
+  const confirmTime = () => {
+    if (!timePicker) return;
+    setNewTime(`${timePicker.hour}:${timePicker.minute}`);
+    setTimePicker(null);
+  };
 
   // --- contacts sheet ---
   const [contactsOpen, setContactsOpen]         = useState(false);
@@ -107,53 +152,16 @@ export default function AppointmentPage() {
     setAppointments(prev => prev.filter(a => a.id !== id));
   };
 
+  const clearDoc = (id: string) => {
+    setAppointments(prev => prev.map(a => a.id !== id ? a : { ...a, doc: undefined }));
+  };
+
   // --- photo picker ---
   const [pickerApptId, setPickerApptId] = useState<string | null>(null);
-  const [cameraApptId, setCameraApptId] = useState<string | null>(null);
-  const [cameraError, setCameraError]   = useState<string | null>(null);
+  const [scanWarning, setScanWarning]   = useState<string | null>(null);
 
-  const videoRef            = useRef<HTMLVideoElement>(null);
-  const streamRef           = useRef<MediaStream | null>(null);
   const fileInputRef        = useRef<HTMLInputElement>(null);
   const pendingUploadIdRef  = useRef<string | null>(null);
-
-  const openCamera = async () => {
-    const id = pickerApptId;
-    setPickerApptId(null);
-    setCameraError(null);
-    setCameraApptId(id);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch {
-      setCameraError("Camera access denied. Please allow camera permission.");
-      setCameraApptId(null);
-    }
-  };
-
-  const closeCamera = () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-    setCameraApptId(null);
-    setCameraError(null);
-  };
-
-  const capturePhoto = () => {
-    if (!videoRef.current || !cameraApptId) return;
-    const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0);
-    const imageUrl = canvas.toDataURL("image/jpeg", 0.85);
-    const id = cameraApptId;
-    closeCamera();
-    attachDoc(id, imageUrl);
-  };
 
   const openGallery = () => {
     pendingUploadIdRef.current = pickerApptId;
@@ -172,8 +180,9 @@ export default function AppointmentPage() {
   };
 
   const attachDoc = (apptId: string, imageUrl: string) => {
+    const scannedAt = new Date().toISOString().slice(0, 10);
     setAppointments(prev => prev.map(a =>
-      a.id !== apptId ? a : { ...a, doc: { image: imageUrl, analyzing: true } }
+      a.id !== apptId ? a : { ...a, doc: { image: imageUrl, analyzing: true, error: undefined, scannedAt } }
     ));
     analyzeReport(apptId, imageUrl);
   };
@@ -198,25 +207,43 @@ export default function AppointmentPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
+
+      if (data.isMedicalReceipt === false) {
+        setAppointments(prev => prev.map(a =>
+          a.id !== apptId ? a : { ...a, doc: undefined }
+        ));
+        setScanWarning("This doesn't look like a medical receipt. Please scan a hospital bill or clinic invoice.");
+        return;
+      }
+
       setAppointments(prev => prev.map(a =>
-        a.id !== apptId ? a : { ...a, doc: { image: imageUrl, report: data, analyzing: false } }
+        a.id !== apptId ? a : { ...a, doc: { ...a.doc!, report: data, analyzing: false } }
       ));
       fireReceiptWebhook({ hospital: data.hospital, total: data.total, currency: data.currency, items: data.items, claimNote: data.claimSummary });
-    } catch {
+    } catch (err: any) {
+      const msg: string = err?.message ?? "Analysis failed";
       setAppointments(prev => prev.map(a =>
-        a.id !== apptId ? a : { ...a, doc: { ...a.doc!, analyzing: false } }
+        a.id !== apptId ? a : { ...a, doc: { ...a.doc!, analyzing: false, error: msg } }
       ));
     }
   };
 
+  // Strip docs where the report has no items and zero total — these are bad scans from before validation was added
+  const sanitizeAppts = (appts: Appointment[]): Appointment[] =>
+    appts.map(a => {
+      if (!a.doc?.report) return a;
+      if (a.doc.report.items.length === 0 && a.doc.report.total === 0) return { ...a, doc: undefined };
+      return a;
+    });
+
   useEffect(() => {
     const localAppts = load(KEYS.appointments, []);
     const localContacts = load(KEYS.contacts, []);
-    if (localAppts.length) setAppointments(localAppts);
+    if (localAppts.length) setAppointments(sanitizeAppts(localAppts));
     if (localContacts.length) setContacts(localContacts);
 
     hydrate().then((data) => {
-      if (data[KEYS.appointments]?.length) setAppointments(data[KEYS.appointments]);
+      if (data[KEYS.appointments]?.length) setAppointments(sanitizeAppts(data[KEYS.appointments]));
       if (data[KEYS.contacts]?.length)     setContacts(data[KEYS.contacts]);
       setHydrated(true);
     });
@@ -231,10 +258,6 @@ export default function AppointmentPage() {
     if (!hydrated) return;
     save(KEYS.contacts, contacts);
   }, [contacts, hydrated]);
-
-  useEffect(() => {
-    return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
-  }, []);
 
   const formatDate = (d: string) => {
     if (!d) return "";
@@ -269,16 +292,6 @@ export default function AppointmentPage() {
               <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
               <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider text-center mb-3">Scan Medical Receipt / Report</p>
 
-              <button onClick={openCamera} className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
-                <div className="h-10 w-10 rounded-full bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center shrink-0">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold text-white">Take Photo</p>
-                  <p className="text-xs text-white/40">Open camera</p>
-                </div>
-              </button>
-
               <button onClick={openGallery} className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
                 <div className="h-10 w-10 rounded-full bg-blue-400/10 border border-blue-400/30 flex items-center justify-center shrink-0">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(96 165 250)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -296,30 +309,13 @@ export default function AppointmentPage() {
           </div>
         )}
 
-        {/* Camera modal */}
-        {cameraApptId && (
-          <div className="absolute inset-0 z-50 bg-black flex flex-col">
-            <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full object-cover" />
-            <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
-              <span className="text-xs text-white/70 font-medium">Medical Receipt</span>
-            </div>
-            <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
-              <span className="text-xs text-yellow-300 font-bold tracking-wider">
-                {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 pb-10 pt-6 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center gap-10">
-              <button onClick={closeCamera} className="h-12 w-12 rounded-full bg-white/10 border border-white/30 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
-              <button onClick={capturePhoto} className="h-20 w-20 rounded-full bg-white border-4 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-transform" />
-            </div>
-          </div>
-        )}
-
-        {cameraError && (
-          <div className="absolute top-14 left-4 right-4 z-50 bg-red-500/90 backdrop-blur-sm rounded-xl px-4 py-3">
-            <p className="text-xs text-white font-medium">{cameraError}</p>
+        {scanWarning && (
+          <div className="absolute top-14 left-4 right-4 z-50 bg-amber-500/95 backdrop-blur-sm rounded-xl px-4 py-3 flex items-start gap-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <p className="text-xs text-white font-medium flex-1">{scanWarning}</p>
+            <button onClick={() => setScanWarning(null)} className="shrink-0 text-white/70 hover:text-white">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
           </div>
         )}
 
@@ -395,6 +391,62 @@ export default function AppointmentPage() {
           </div>
         )}
 
+        {/* Date picker bottom sheet */}
+        {datePicker && (() => {
+          const daysInMonth = new Date(Number(datePicker.year), Number(datePicker.month), 0).getDate();
+          const dayItems = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, "0"));
+          return (
+            <div className="absolute inset-0 z-[60] flex items-end" onClick={() => setDatePicker(null)}>
+              <div className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
+                <p className="text-sm font-bold text-white text-center">Select Date</p>
+                <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                  {([
+                    { label: "Day",   items: dayItems,   display: undefined, key: "day"   as const },
+                    { label: "Month", items: MONTH_KEYS, display: MONTHS,    key: "month" as const },
+                    { label: "Year",  items: YEARS,      display: undefined, key: "year"  as const },
+                  ] as const).map(col => (
+                    <div key={col.key} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>{col.label}</span>
+                      <ScrollPickerColumn
+                        items={col.items as unknown as string[]}
+                        displayItems={col.display as unknown as string[] | undefined}
+                        value={datePicker[col.key]}
+                        onChange={v => setDatePicker(p => p && ({ ...p, [col.key]: v }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button onClick={confirmDate} className="w-full py-3 rounded-xl bg-yellow-400 text-black font-bold text-sm">Confirm</button>
+                <button onClick={() => setDatePicker(null)} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm">Cancel</button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Time picker bottom sheet */}
+        {timePicker && (
+          <div className="absolute inset-0 z-[60] flex items-end" onClick={() => setTimePicker(null)}>
+            <div className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
+              <p className="text-sm font-bold text-white text-center">Select Time</p>
+              <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Hour</span>
+                  <ScrollPickerColumn items={HOURS} value={timePicker.hour} onChange={h => setTimePicker(p => p && ({ ...p, hour: h }))} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: PICKER_H, paddingTop: 22, color: "#fff", fontSize: 24, fontWeight: 700 }}>:</div>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Minute</span>
+                  <ScrollPickerColumn items={MINUTES} value={timePicker.minute} onChange={m => setTimePicker(p => p && ({ ...p, minute: m }))} />
+                </div>
+              </div>
+              <button onClick={confirmTime} className="w-full py-3 rounded-xl bg-yellow-400 text-black font-bold text-sm">Confirm</button>
+              <button onClick={() => setTimePicker(null)} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm">Cancel</button>
+            </div>
+          </div>
+        )}
+
         {/* Add appointment bottom sheet */}
         {addOpen && (
           <div className="absolute inset-0 z-50 flex items-end" onClick={() => setAddOpen(false)}>
@@ -418,21 +470,25 @@ export default function AppointmentPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Date</label>
-                  <input
-                    type="date"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/50"
-                    value={newDate}
-                    onChange={e => setNewDate(e.target.value)}
-                  />
+                  <button
+                    onClick={openDatePicker}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-left outline-none flex items-center justify-between"
+                  >
+                    <span className={newDate ? "text-white" : "text-white/30"}>
+                      {newDate ? new Date(newDate + "T00:00:00").toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" }) : "Select date"}
+                    </span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  </button>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Time</label>
-                  <input
-                    type="time"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-yellow-400/50"
-                    value={newTime}
-                    onChange={e => setNewTime(e.target.value)}
-                  />
+                  <button
+                    onClick={openTimePicker}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white text-left outline-none flex items-center justify-between"
+                  >
+                    <span>{formatTime(newTime)}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </button>
                 </div>
               </div>
 
@@ -554,7 +610,7 @@ export default function AppointmentPage() {
                 {upcoming.length > 0 && (
                   <div className="space-y-3">
                     <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Upcoming</p>
-                    {upcoming.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={setPickerApptId} formatDate={formatDate} formatTime={formatTime} isPast={false} />)}
+                    {upcoming.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={(id) => { setScanWarning(null); setPickerApptId(id); }} onClearDoc={clearDoc} formatDate={formatDate} formatTime={formatTime} isPast={false} />)}
                   </div>
                 )}
 
@@ -562,7 +618,7 @@ export default function AppointmentPage() {
                 {past.length > 0 && (
                   <div className="space-y-3">
                     <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Past Visits</p>
-                    {past.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={setPickerApptId} formatDate={formatDate} formatTime={formatTime} isPast={true} />)}
+                    {past.map(appt => <AppointmentCard key={appt.id} appt={appt} onDelete={deleteAppointment} onScanReceipt={(id) => { setScanWarning(null); setPickerApptId(id); }} onClearDoc={clearDoc} formatDate={formatDate} formatTime={formatTime} isPast={true} />)}
                   </div>
                 )}
 
@@ -593,11 +649,12 @@ export default function AppointmentPage() {
 
 // --- appointment card sub-component ---
 function AppointmentCard({
-  appt, onDelete, onScanReceipt, formatDate, formatTime, isPast,
+  appt, onDelete, onScanReceipt, onClearDoc, formatDate, formatTime, isPast,
 }: {
   appt: Appointment;
   onDelete: (id: string) => void;
   onScanReceipt: (id: string) => void;
+  onClearDoc: (id: string) => void;
   formatDate: (d: string) => string;
   formatTime: (t: string) => string;
   isPast: boolean;
@@ -639,7 +696,7 @@ function AppointmentCard({
             <div className="h-8 w-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-40"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             </div>
-            <span className="text-[12px] text-white/30 font-medium">Tap to scan receipt / medical report</span>
+            <span className="text-[12px] text-white/30 font-medium">Tap to scan receipt </span>
           </button>
         ) : (
           <div className="space-y-3">
@@ -649,12 +706,22 @@ function AppointmentCard({
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
                 <span className="text-[9px] text-white/60 font-medium">Medical Receipt</span>
-                <button
-                  onClick={() => onScanReceipt(appt.id)}
-                  className="text-[9px] text-yellow-300/70 font-bold"
-                >
-                  Rescan
-                </button>
+                {!appt.doc.report && !appt.doc.analyzing && (
+                  <button
+                    onClick={() => onScanReceipt(appt.id)}
+                    className="text-[10px] text-yellow-300 font-bold bg-black/40 px-2 py-0.5 rounded-md border border-yellow-400/20"
+                  >
+                    Rescan
+                  </button>
+                )}
+                {appt.doc.report && (
+                  <button
+                    onClick={() => onClearDoc(appt.id)}
+                    className="h-6 w-6 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white/50 hover:text-red-400 hover:border-red-400/30 transition-colors"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -663,6 +730,25 @@ function AppointmentCard({
               <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 flex items-center gap-2">
                 <svg className="animate-spin shrink-0" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                 <span className="text-[11px] text-white/50">Analysing report...</span>
+              </div>
+            )}
+
+            {/* Error state */}
+            {!appt.doc.analyzing && !appt.doc.report && appt.doc.error && (
+              <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2.5 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgb(248 113 113)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span className="text-[11px] text-red-300/80">Could not analyse receipt</span>
+                </div>
+                {appt.doc.error && appt.doc.error !== "Analysis failed" && (
+                  <p className="text-[10px] text-red-300/50 pl-5 leading-relaxed">{appt.doc.error}</p>
+                )}
+                <button
+                  onClick={() => onScanReceipt(appt.id)}
+                  className="w-full py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-yellow-300 font-bold hover:bg-white/10 transition-colors"
+                >
+                  Tap to Rescan
+                </button>
               </div>
             )}
 
@@ -675,7 +761,6 @@ function AppointmentCard({
                     <p className="text-[10px] text-yellow-300/70 font-bold uppercase tracking-wider">Medical Expense Breakdown</p>
                     <p className="text-[13px] font-bold text-white mt-0.5">{appt.doc.report.hospital || appt.hospital}</p>
                   </div>
-                  {appt.doc.report.visitDate && <span className="text-[10px] text-white/40 mt-1 shrink-0">{appt.doc.report.visitDate}</span>}
                 </div>
 
                 {appt.doc.report.diagnosis && (

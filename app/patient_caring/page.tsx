@@ -5,7 +5,7 @@ import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "./ReflectiveCard";
 import type { NutritionResult } from "@/app/api/analyze-meal/route";
-import { save, load, hydrate, KEYS } from "@/app/lib/store";
+import { save, load, hydrate, resetDailyData, KEYS } from "@/app/lib/store";
 
 type Log = {
   label: string;
@@ -21,61 +21,23 @@ type Task = {
   name: string;
   logs: Log[];
   icon: string;
+  targetLogs: number; // how many check-ins count as "done"
 };
 
 export default function PatientCaringPage() {
   const router = useRouter();
 
   const [hydrated, setHydrated] = useState(false);
-  const [patientTasks, setPatientTasks] = useState<Task[]>(() => load(KEYS.careTasks, [
-    { id: "bathing",  name: "Bathing",  logs: [], icon: "🛁" },
-    { id: "dressing", name: "Dressing", logs: [], icon: "👕" },
-    { id: "feeding",  name: "Feeding",  logs: [], icon: "🥣" },
-  ]));
+  const defaultTasks: Task[] = [
+    { id: "bathing",  name: "Bathing",  logs: [], icon: "🛁", targetLogs: 1 },
+    { id: "dressing", name: "Dressing", logs: [], icon: "👕", targetLogs: 1 },
+    { id: "feeding",  name: "Feeding",  logs: [], icon: "🥣", targetLogs: 1 },
+  ];
+  const [patientTasks, setPatientTasks] = useState<Task[]>(defaultTasks);
 
-  const [pickerOpen, setPickerOpen]   = useState(false);
-  const [cameraOpen, setCameraOpen]   = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const streamRef   = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // --- camera ---
-  const openCamera = async () => {
-    setPickerOpen(false);
-    setCameraError(null);
-    setCameraOpen(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch {
-      setCameraError("Camera access denied. Please allow camera permission.");
-      setCameraOpen(false);
-    }
-  };
-
-  const closeCamera = () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-    setCameraOpen(false);
-    setCameraError(null);
-  };
-
-  const capturePhoto = () => {
-    if (!videoRef.current) return;
-    const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0);
-    closeCamera();
-    addMealLog(canvas.toDataURL("image/jpeg", 0.85));
-  };
 
   // --- gallery upload ---
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,6 +89,16 @@ export default function PatientCaringPage() {
     }
   };
 
+  const removeLogFromTask = (taskId: string, logIdx: number) => {
+    const LABELS = ["First check in", "Second check in", "Third check in", "Fourth check in"];
+    setPatientTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const newLogs = t.logs.filter((_, i) => i !== logIdx)
+        .map((log, i) => ({ ...log, label: LABELS[i] ?? `Check in ${i + 1}` }));
+      return { ...t, logs: newLogs };
+    }));
+  };
+
   const addLogToTask = (taskId: string) => {
     setPatientTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t;
@@ -140,6 +112,9 @@ export default function PatientCaringPage() {
   };
 
   useEffect(() => {
+    resetDailyData();
+    const local = load(KEYS.careTasks, defaultTasks);
+    if (local.length) setPatientTasks(local);
     hydrate().then((data) => {
       if (data[KEYS.careTasks]?.length) setPatientTasks(data[KEYS.careTasks]);
       setHydrated(true);
@@ -151,9 +126,6 @@ export default function PatientCaringPage() {
     save(KEYS.careTasks, patientTasks);
   }, [patientTasks, hydrated]);
 
-  useEffect(() => {
-    return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
-  }, []);
 
   return (
     <IPhone13Frame>
@@ -171,19 +143,6 @@ export default function PatientCaringPage() {
             >
               <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
               <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider text-center mb-3">Add Meal Photo</p>
-
-              <button
-                onClick={openCamera}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-              >
-                <div className="h-10 w-10 rounded-full bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center shrink-0">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold text-white">Take Photo</p>
-                  <p className="text-xs text-white/40">Open camera</p>
-                </div>
-              </button>
 
               <button
                 onClick={openGallery}
@@ -208,29 +167,6 @@ export default function PatientCaringPage() {
           </div>
         )}
 
-        {/* Camera modal */}
-        {cameraOpen && (
-          <div className="absolute inset-0 z-50 bg-black flex flex-col">
-            <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full object-cover" />
-            <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-lg">
-              <span className="text-xs text-yellow-300 font-bold tracking-wider">
-                {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 pb-10 pt-6 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center gap-10">
-              <button onClick={closeCamera} className="h-12 w-12 rounded-full bg-white/10 border border-white/30 flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
-              <button onClick={capturePhoto} className="h-20 w-20 rounded-full bg-white border-4 border-white/40 shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-transform" />
-            </div>
-          </div>
-        )}
-
-        {cameraError && (
-          <div className="absolute top-14 left-4 right-4 z-50 bg-red-500/90 backdrop-blur-sm rounded-xl px-4 py-3">
-            <p className="text-xs text-white font-medium">{cameraError}</p>
-          </div>
-        )}
 
         {/* Reflective Card Content */}
         <div className="relative max-h-full flex flex-col">
@@ -268,7 +204,7 @@ export default function PatientCaringPage() {
                     <div>
                       <p className="text-xs text-white/70 font-bold uppercase tracking-wider mb-1">Today's Progress</p>
                       <p className="text-lg font-bold text-white drop-shadow-md">
-                        {patientTasks.filter(t => t.logs.length > 0).length}{" "}
+                        {patientTasks.filter(t => t.logs.length >= (t.targetLogs ?? 1)).length}{" "}
                         <span className="text-sm text-white/50 font-normal">/ {patientTasks.length} tasks</span>
                       </p>
                     </div>
@@ -276,7 +212,7 @@ export default function PatientCaringPage() {
                       <svg className="absolute inset-0 h-full w-full -rotate-90 transform" viewBox="0 0 36 36">
                         <path
                           className="text-yellow-400 drop-shadow-[0_0_5px_rgba(250,204,21,0.5)]"
-                          strokeDasharray={`${(patientTasks.filter(t => t.logs.length > 0).length / patientTasks.length) * 100}, 100`}
+                          strokeDasharray={`${(patientTasks.filter(t => t.logs.length >= (t.targetLogs ?? 1)).length / patientTasks.length) * 100}, 100`}
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                           fill="none"
                           stroke="currentColor"
@@ -284,7 +220,7 @@ export default function PatientCaringPage() {
                         />
                       </svg>
                       <span className="text-xs font-bold text-white relative z-10 drop-shadow-md">
-                        {Math.round((patientTasks.filter(t => t.logs.length > 0).length / patientTasks.length) * 100)}%
+                        {Math.round((patientTasks.filter(t => t.logs.length >= (t.targetLogs ?? 1)).length / patientTasks.length) * 100)}%
                       </span>
                     </div>
                   </div>
@@ -295,18 +231,29 @@ export default function PatientCaringPage() {
                     <div
                       key={task.id}
                       onClick={() => task.id === "feeding" ? setPickerOpen(true) : addLogToTask(task.id)}
-                      className={`relative flex flex-col p-4 rounded-xl border cursor-pointer transition-all shadow-lg backdrop-blur-sm ${task.logs.length > 0 ? "bg-yellow-400/20 border-yellow-400/40" : "bg-black/50 border-white/10 hover:border-white/30"}`}
+                      className={`relative flex flex-col p-4 rounded-xl border cursor-pointer transition-all shadow-lg backdrop-blur-sm ${task.logs.length >= task.targetLogs ? "bg-yellow-400/20 border-yellow-400/40" : "bg-black/50 border-white/10 hover:border-white/30"}`}
                     >
                       <div className="flex items-center justify-between w-full">
                         <div className="flex items-center gap-4">
-                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-2xl transition-colors shadow-inner ${task.logs.length > 0 ? "bg-yellow-400/30 text-yellow-300" : "bg-white/10 text-white/60"}`}>
+                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-2xl transition-colors shadow-inner ${task.logs.length >= (task.targetLogs ?? 1) ? "bg-yellow-400/30 text-yellow-300" : "bg-white/10 text-white/60"}`}>
                             {task.icon}
                           </div>
                           <div>
-                            <p className={`font-bold text-[15px] transition-colors drop-shadow-sm ${task.logs.length > 0 ? "text-yellow-100" : "text-white"}`}>{task.name}</p>
-                            {task.id === "feeding" && (
-                              <p className="text-[11px] text-white/40 mt-0.5">Tap to log meal photo</p>
-                            )}
+                            <p className={`font-bold text-[15px] transition-colors drop-shadow-sm ${task.logs.length >= (task.targetLogs ?? 1) ? "text-yellow-100" : "text-white"}`}>{task.name}</p>
+                            {/* Stepper inline with progress */}
+                            <div className="flex items-center gap-1.5 mt-0.5" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => setPatientTasks(prev => prev.map(t => t.id === task.id ? { ...t, targetLogs: Math.max(1, (t.targetLogs ?? 1) - 1) } : t))}
+                                className="h-4 w-4 rounded-full bg-white/10 border border-white/20 text-white/50 text-[10px] flex items-center justify-center hover:bg-white/20 transition-colors"
+                              >−</button>
+                              <p className="text-[11px] text-white/40">
+                                {task.logs.length}/{task.targetLogs ?? 1} check-in{(task.targetLogs ?? 1) !== 1 ? "s" : ""}
+                              </p>
+                              <button
+                                onClick={() => setPatientTasks(prev => prev.map(t => t.id === task.id ? { ...t, targetLogs: (t.targetLogs ?? 1) + 1 } : t))}
+                                className="h-4 w-4 rounded-full bg-white/10 border border-white/20 text-white/50 text-[10px] flex items-center justify-center hover:bg-white/20 transition-colors"
+                              >+</button>
+                            </div>
                           </div>
                         </div>
                         <div className={`h-8 w-8 shrink-0 rounded-full border flex items-center justify-center transition-colors ${task.id === "feeding" ? "border-yellow-400/40 bg-yellow-400/10" : "border-white/20 bg-white/5 hover:bg-white/10"}`}>
@@ -327,13 +274,21 @@ export default function PatientCaringPage() {
                                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21 / 0.6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                   <span className="text-yellow-100/70 font-medium tracking-wide">{log.label}</span>
                                 </div>
-                                <div className="text-right shrink-0 ml-2">
-                                  <p className="text-yellow-300 font-bold drop-shadow-md leading-none">{log.time}</p>
-                                  <p className="text-white/30 text-[9px] mt-0.5">
-                                    {log.completedAt
-                                      ? new Date(log.completedAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
-                                      : ""}
-                                  </p>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                  <div className="text-right">
+                                    <p className="text-yellow-300 font-bold drop-shadow-md leading-none">{log.time}</p>
+                                    <p className="text-white/30 text-[9px] mt-0.5">
+                                      {log.completedAt
+                                        ? new Date(log.completedAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
+                                        : ""}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); removeLogFromTask(task.id, idx); }}
+                                    className="h-5 w-5 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/40 hover:bg-red-500/20 hover:border-red-500/30 hover:text-red-400 transition-colors shrink-0"
+                                  >
+                                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                  </button>
                                 </div>
                               </div>
                               {log.image && (

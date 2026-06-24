@@ -6,7 +6,6 @@ import { useRouter, usePathname } from "next/navigation";
 import PixelSnow from "../onboarding/PixelSnow";
 import Dock from "../home/bottom widget/Dock";
 import { load, hydrate, KEYS } from "@/app/lib/store";
-import type { FinancialAnalysisResult } from "@/app/api/financial-analysis/route";
 
 // ── types matching what each page stores ──────────────────────────────────────
 
@@ -17,7 +16,7 @@ type HouseTask     = { id: string; name: string; icon: string; logs: HouseLog[] 
 
 type ReportLineItem    = { description: string; amount: number };
 type MedicalReportResult = { hospital: string; patientName: string; visitDate: string; items: ReportLineItem[]; subtotal: number; tax: number; total: number; currency: string; diagnosis: string; claimSummary: string };
-type AppointmentDoc    = { image: string; report?: MedicalReportResult; analyzing: boolean };
+type AppointmentDoc    = { image: string; report?: MedicalReportResult; analyzing: boolean; scannedAt?: string };
 type Appointment       = { id: string; hospital: string; date: string; time: string; notes: string; doc?: AppointmentDoc };
 
 type Transaction = {
@@ -64,7 +63,7 @@ function buildTransactions(householdTasks: HouseTask[], appointments: Appointmen
     txns.push({
       id: `medical-${idx}`,
       title: r.hospital || a.hospital,
-      date: r.visitDate || a.date,
+      date: a.doc?.scannedAt || a.date,
       amount: r.total,
       currency: r.currency || "MYR",
       category: "medical",
@@ -95,10 +94,8 @@ export default function FinancialPage() {
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [expanded,     setExpanded]     = useState<string | null>(null);
+  const [viewMode,     setViewMode]     = useState<"daily" | "monthly">("monthly");
 
-  const [analysis,    setAnalysis]    = useState<FinancialAnalysisResult | null>(null);
-  const [generating,  setGenerating]  = useState(false);
-  const [genError,    setGenError]    = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
   const [contacts,           setContacts]           = useState<{id:string;name:string;chatId:string;relation:string}[]>([]);
@@ -127,12 +124,25 @@ export default function FinancialPage() {
     });
   }, []);
 
+  // All-time totals (used for PDF export & Send)
   const groceryTxns = transactions.filter(t => t.category === "groceries");
   const medicalTxns = transactions.filter(t => t.category === "medical");
   const groceryTotal = groceryTxns.reduce((s, t) => s + t.amount, 0);
   const medicalTotal = medicalTxns.reduce((s, t) => s + t.amount, 0);
   const grandTotal   = groceryTotal + medicalTotal;
   const hasData      = transactions.length > 0;
+
+  // Display-filtered transactions: Daily = today, Monthly = this month
+  const currentYearMonth = new Date().toISOString().slice(0, 7);
+  const currentDate      = new Date().toISOString().slice(0, 10);
+  const displayTransactions = viewMode === "monthly"
+    ? transactions.filter(t => (t.date ?? "").startsWith(currentYearMonth))
+    : transactions.filter(t => (t.date ?? "").startsWith(currentDate));
+  const displayGroceryTxns  = displayTransactions.filter(t => t.category === "groceries");
+  const displayMedicalTxns  = displayTransactions.filter(t => t.category === "medical");
+  const displayGroceryTotal = displayGroceryTxns.reduce((s, t) => s + t.amount, 0);
+  const displayMedicalTotal = displayMedicalTxns.reduce((s, t) => s + t.amount, 0);
+  const displayGrandTotal   = displayGroceryTotal + displayMedicalTotal;
 
   // ── Send to Family ────────────────────────────────────────────────────────
 
@@ -170,32 +180,6 @@ export default function FinancialPage() {
       setSendError(e.message ?? "Failed to send");
     } finally {
       setSending(false);
-    }
-  };
-
-  // ── AI analysis ───────────────────────────────────────────────────────────
-
-  const generateAnalysis = async () => {
-    setGenerating(true);
-    setGenError(null);
-    try {
-      const res  = await fetch("/api/financial-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          groceryReceipts: groceryTxns.map(t => ({ store: t.title, date: t.date, total: t.amount, items: t.items })),
-          medicalReceipts: medicalTxns.map(t => ({ hospital: t.title, date: t.date, total: t.amount, items: t.items })),
-          groceryTotal,
-          medicalTotal,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
-      setAnalysis(data);
-    } catch (e: any) {
-      setGenError(e.message ?? "Could not generate analysis");
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -301,16 +285,6 @@ export default function FinancialPage() {
         });
       }
 
-      // AI Analysis
-      if (analysis) {
-        section("AI Spending Analysis");
-        bodyText(analysis.insight); nl(1);
-        if (analysis.groceriesTip) { row("Groceries", analysis.groceriesTip); }
-        if (analysis.medicalTip)   { row("Medical",   analysis.medicalTip);   }
-        if (analysis.claimNote)    { nl(1); bodyText(`Note: ${analysis.claimNote}`); }
-        nl(2);
-      }
-
       // Footer
       const pages = doc.getNumberOfPages();
       for (let i = 1; i <= pages; i++) {
@@ -325,6 +299,30 @@ export default function FinancialPage() {
     } finally {
       setDownloading(false);
     }
+  };
+
+  // ── grouped view ─────────────────────────────────────────────────────────
+
+  const groupedTransactions: [string, Transaction[]][] = (() => {
+    const groups: Record<string, Transaction[]> = {};
+    displayTransactions.forEach(t => {
+      const raw = t.date ?? "";
+      const key = viewMode === "daily"
+        ? (raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : "Unknown")
+        : (raw.match(/^\d{4}-\d{2}/) ? raw.slice(0, 7) : "Unknown");
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    });
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  })();
+
+  const formatGroupLabel = (key: string, mode: "daily" | "monthly") => {
+    if (key === "Unknown") return "Unknown Date";
+    if (mode === "daily") {
+      return new Date(key + "T00:00:00").toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    }
+    const [y, m] = key.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-MY", { month: "long", year: "numeric" });
   };
 
   // ── nav ───────────────────────────────────────────────────────────────────
@@ -430,140 +428,158 @@ export default function FinancialPage() {
 
           <div className="px-6 py-5 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-            {/* Total Spending Card */}
-            <div className="relative rounded-[32px] overflow-hidden border border-white/20 bg-gradient-to-br from-emerald-500/20 to-teal-900/40 p-6 backdrop-blur-[40px] shadow-[0_16px_40px_rgba(16,185,129,0.15)]">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              </div>
-              <p className="text-sm text-emerald-100/70 font-medium tracking-wide uppercase mb-1">Total from Receipts</p>
-              {hasData ? (
-                <h2 className="text-4xl font-black text-white tracking-tight mb-4 drop-shadow-md">
-                  <span className="text-xl text-white/60 mr-1">RM</span>{fmt(grandTotal)}
-                </h2>
-              ) : (
-                <p className="text-lg font-bold text-white/30 mb-4">No receipts scanned yet</p>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-black/20 border border-white/10 px-3 py-2.5">
-                  <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-0.5">🛒 Groceries</p>
-                  <p className="text-base font-bold text-white">RM {fmt(groceryTotal)}</p>
-                  <p className="text-[10px] text-white/40">{groceryTxns.length} receipt{groceryTxns.length !== 1 ? "s" : ""}</p>
-                </div>
-                <div className="rounded-xl bg-black/20 border border-white/10 px-3 py-2.5">
-                  <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-0.5">🏥 Medical</p>
-                  <p className="text-base font-bold text-white">RM {fmt(medicalTotal)}</p>
-                  <p className="text-[10px] text-white/40">{medicalTxns.length} receipt{medicalTxns.length !== 1 ? "s" : ""}</p>
+            {/* Daily / Monthly toggle */}
+            {hasData && (
+              <div className="flex items-center justify-between ml-1">
+                <p className="text-xs text-white/40 font-bold uppercase tracking-wider">View</p>
+                <div className="flex items-center gap-0.5 rounded-xl p-0.5" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <button
+                    onClick={() => setViewMode("daily")}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${viewMode === "daily" ? "bg-white/15 text-white" : "text-white/30 hover:text-white/50"}`}
+                  >Daily</button>
+                  <button
+                    onClick={() => setViewMode("monthly")}
+                    className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${viewMode === "monthly" ? "bg-white/15 text-white" : "text-white/30 hover:text-white/50"}`}
+                  >Monthly</button>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* AI Analysis */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-white/50 font-bold uppercase tracking-wider">Spending Analysis</p>
-                <span className="text-[10px] text-white/20">Gemini AI</span>
-              </div>
-
-              {!analysis && !generating && (
-                <button
-                  onClick={generateAnalysis}
-                  disabled={!hasData}
-                  className="w-full py-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 text-sm font-bold hover:bg-emerald-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Analyse My Spending
-                </button>
-              )}
-
-              {generating && (
-                <div className="flex items-center gap-2 py-2">
-                  <svg className="animate-spin shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgb(52 211 153)" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                  <span className="text-sm text-white/50">Reading your receipts...</span>
-                </div>
-              )}
-
-              {genError && <p className="text-xs text-red-400">{genError}</p>}
-
-              {analysis && (
-                <div className="space-y-3">
-                  <p className="text-sm text-white/75 leading-relaxed">{analysis.insight}</p>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-orange-500/5 border border-orange-500/20 p-3">
-                      <p className="text-[10px] text-orange-300/60 font-bold uppercase tracking-wider mb-1">🛒 Groceries</p>
-                      <p className="text-[12px] text-white/60 leading-relaxed">{analysis.groceriesTip}</p>
+            {/* Pie Chart */}
+            {hasData && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4">
+                <p className="text-xs text-white/50 font-bold uppercase tracking-wider mb-4">
+                  {viewMode === "monthly"
+                    ? `Spending Breakdown · ${new Date().toLocaleDateString("en-MY", { month: "long", year: "numeric" })}`
+                    : `Spending Breakdown · ${new Date().toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })}`
+                  }
+                </p>
+                <div className="flex items-center gap-4">
+                  {(() => {
+                    const r = 15.9;
+                    const circ = 2 * Math.PI * r;
+                    const grocPct = displayGrandTotal > 0 ? (displayGroceryTotal / displayGrandTotal) * circ : 0;
+                    const medPct  = displayGrandTotal > 0 ? (displayMedicalTotal / displayGrandTotal) * circ : 0;
+                    return (
+                      <svg viewBox="0 0 36 36" className="w-20 h-20 shrink-0 -rotate-90">
+                        <circle cx="18" cy="18" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+                        {grocPct > 0 && (
+                          <circle cx="18" cy="18" r={r} fill="none"
+                            stroke="#f97316"
+                            strokeWidth="4"
+                            strokeDasharray={`${grocPct} ${circ}`}
+                            strokeLinecap="butt"
+                          />
+                        )}
+                        {medPct > 0 && (
+                          <circle cx="18" cy="18" r={r} fill="none"
+                            stroke="#60a5fa"
+                            strokeWidth="4"
+                            strokeDasharray={`${medPct} ${circ}`}
+                            strokeDashoffset={-grocPct}
+                            strokeLinecap="butt"
+                          />
+                        )}
+                      </svg>
+                    );
+                  })()}
+                  <div className="space-y-3 flex-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-orange-500 shrink-0" />
+                        <span className="text-[12px] text-white/60">Groceries</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-white/35">{displayGrandTotal > 0 ? Math.round((displayGroceryTotal / displayGrandTotal) * 100) : 0}%</span>
+                        <span className="text-[13px] font-semibold text-white">RM {displayGroceryTotal.toFixed(2)}</span>
+                      </div>
                     </div>
-                    <div className="rounded-xl bg-blue-500/5 border border-blue-500/20 p-3">
-                      <p className="text-[10px] text-blue-300/60 font-bold uppercase tracking-wider mb-1">🏥 Medical</p>
-                      <p className="text-[12px] text-white/60 leading-relaxed">{analysis.medicalTip}</p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-blue-400 shrink-0" />
+                        <span className="text-[12px] text-white/60">Medical</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-white/35">{displayGrandTotal > 0 ? Math.round((displayMedicalTotal / displayGrandTotal) * 100) : 0}%</span>
+                        <span className="text-[13px] font-semibold text-white">RM {displayMedicalTotal.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="border-t border-white/10 pt-2 flex justify-between items-center">
+                      <span className="text-[11px] text-white/40">Total</span>
+                      <span className="text-[13px] font-bold text-white">RM {displayGrandTotal.toFixed(2)}</span>
                     </div>
                   </div>
-
-                  {analysis.claimNote && (
-                    <div className="flex items-start gap-2 rounded-xl bg-emerald-500/5 border border-emerald-500/20 px-3 py-2.5">
-                      <span className="text-emerald-400 text-sm shrink-0">💡</span>
-                      <p className="text-[12px] text-white/60 leading-relaxed">{analysis.claimNote}</p>
-                    </div>
-                  )}
-
-                  <button onClick={generateAnalysis} className="text-[11px] text-white/25 hover:text-white/50 transition-colors">
-                    Refresh analysis
-                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Transaction list */}
             {hasData ? (
               <div className="space-y-3">
-                <p className="text-xs text-white/40 font-bold uppercase tracking-wider ml-1">All Receipts</p>
-                {transactions.map(t => (
-                  <div key={t.id} className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
-                    <button
-                      className="w-full flex items-center justify-between p-4 text-left"
-                      onClick={() => setExpanded(expanded === t.id ? null : t.id)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-xl overflow-hidden shrink-0 border ${t.category === "groceries" ? "border-orange-500/20" : "border-blue-500/20"}`}>
-                          {t.image ? (
-                            <img src={t.image} alt="Receipt" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className={`h-full w-full flex items-center justify-center text-lg ${t.category === "groceries" ? "bg-orange-500/10" : "bg-blue-500/10"}`}>
-                              {t.category === "groceries" ? "🛒" : "🏥"}
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-bold text-white text-sm">{t.title}</p>
-                          <p className="text-[11px] text-white/40">{formatDisplayDate(t.date)}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-bold text-white text-sm">RM {fmt(t.amount)}</span>
-                        <svg className={`transition-transform ${expanded === t.id ? "rotate-180" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity={0.3}><polyline points="6 9 12 15 18 9"/></svg>
-                      </div>
-                    </button>
+                <div className="flex items-center justify-between ml-1">
+                  <p className="text-xs text-white/40 font-bold uppercase tracking-wider">All Receipts</p>
+                  {displayTransactions.length === 0 && transactions.length > 0 && (
+                    <p className="text-[10px] text-white/25 italic">
+                      {viewMode === "monthly" ? "No receipts this month" : "No receipts today"}
+                    </p>
+                  )}
+                </div>
 
-                    {expanded === t.id && (
-                      <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-2">
-                        {t.image && (
-                          <div className="w-full h-32 rounded-xl overflow-hidden mb-3 border border-white/10">
-                            <img src={t.image} alt="Receipt photo" className="w-full h-full object-cover" />
+                {groupedTransactions.map(([groupKey, groupTxns]) => (
+                  <div key={groupKey} className="space-y-2">
+                    <div className="flex items-center justify-between px-1 pt-1">
+                      <p className="text-[11px] text-white/50 font-semibold">{formatGroupLabel(groupKey, viewMode)}</p>
+                      <p className="text-[11px] text-white/40 font-semibold">RM {fmt(groupTxns.reduce((s, t) => s + t.amount, 0))}</p>
+                    </div>
+                    {groupTxns.map(t => (
+                      <div key={t.id} className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+                        <button
+                          className="w-full flex items-center justify-between p-4 text-left"
+                          onClick={() => setExpanded(expanded === t.id ? null : t.id)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`h-10 w-10 rounded-xl overflow-hidden shrink-0 border ${t.category === "groceries" ? "border-orange-500/20" : "border-blue-500/20"}`}>
+                              {t.image ? (
+                                <img src={t.image} alt="Receipt" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className={`h-full w-full flex items-center justify-center text-lg ${t.category === "groceries" ? "bg-orange-500/10" : "bg-blue-500/10"}`}>
+                                  {t.category === "groceries" ? "🛒" : "🏥"}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold text-white text-sm">{t.title}</p>
+                            </div>
                           </div>
-                        )}
-                        {t.items.map((item, i) => (
-                          <div key={i} className="flex justify-between text-[12px]">
-                            <span className="text-white/50">{item.label}</span>
-                            <span className="text-white/70 font-medium">RM {fmt(item.amount)}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-bold text-white text-sm">RM {fmt(t.amount)}</span>
+                            <svg className={`transition-transform ${expanded === t.id ? "rotate-180" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity={0.3}><polyline points="6 9 12 15 18 9"/></svg>
                           </div>
-                        ))}
-                        {t.claimNote && (
-                          <div className="mt-2 pt-2 border-t border-white/5">
-                            <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">Claim Note</p>
-                            <p className="text-[11px] text-white/40 italic leading-relaxed">{t.claimNote}</p>
+                        </button>
+
+                        {expanded === t.id && (
+                          <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-2">
+                            {t.image && (
+                              <div className="w-full h-32 rounded-xl overflow-hidden mb-3 border border-white/10">
+                                <img src={t.image} alt="Receipt photo" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            {t.items.map((item, i) => (
+                              <div key={i} className="flex justify-between text-[12px]">
+                                <span className="text-white/50">{item.label}</span>
+                                <span className="text-white/70 font-medium">RM {fmt(item.amount)}</span>
+                              </div>
+                            ))}
+                            {t.claimNote && (
+                              <div className="mt-2 pt-2 border-t border-white/5">
+                                <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">Claim Note</p>
+                                <p className="text-[11px] text-white/40 italic leading-relaxed">{t.claimNote}</p>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
+                    ))}
                   </div>
                 ))}
               </div>

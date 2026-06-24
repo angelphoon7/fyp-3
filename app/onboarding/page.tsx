@@ -21,7 +21,7 @@ interface FormData {
   familyPhone: string;
 }
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 4;
 
 const T = {
   en: {
@@ -119,17 +119,13 @@ export default function Onboarding() {
   };
 
   const canNext = () => {
-    if (step === 2) return form.phone.trim().length > 6;
-    if (step === 3) return form.caregiverName.trim().length > 0;
-    if (step === 4) return form.relationship.length > 0;
-    if (step === 5) return form.patientName.trim().length > 0 && form.patientAge.trim().length > 0;
-    if (step === 6) return form.mainCondition.length > 0;
-    if (step === 8) return form.checkInTime.trim().length > 0;
+    if (step === 1) return form.caregiverName.trim().length > 0;
+    if (step === 2) return form.patientName.trim().length > 0 && form.patientAge.trim().length > 0;
+    if (step === 3) return form.mainCondition.length > 0;
     return true;
   };
 
   const handleNext = async () => {
-    if (step === 1) { setForm(f => ({ ...f, language: lang })); }
     if (step < TOTAL_STEPS) { setStep(s => s + 1); return; }
     // Final step — save profile
     setSubmitting(true);
@@ -142,7 +138,7 @@ export default function Onboarding() {
       });
       // Cache profile locally so the app can read it without hitting the API
       localStorage.setItem("kai_user_profile", JSON.stringify(profile));
-      setDone(true);
+      router.push("/home");
     } finally {
       setSubmitting(false);
     }
@@ -183,86 +179,23 @@ export default function Onboarding() {
             />
           </div>
           <h1 className="text-xl font-bold">
-            {step === 1 && t.s1.title}
-            {step === 2 && t.s2.title}
-            {step === 3 && t.s3.title}
-            {step === 4 && t.s4.title}
-            {step === 5 && t.s5.title}
-            {step === 6 && t.s6.title}
-            {step === 7 && t.s7.title}
-            {step === 8 && t.s8.title}
-            {step === 9 && t.s9.title}
+            {step === 1 && t.s3.title}
+            {step === 2 && t.s5.title}
+            {step === 3 && t.s6.title}
+            {step === 4 && t.s7.title}
           </h1>
           <p className="mt-0.5 text-sm text-yellow-400">
-            {step === 1 && t.s1.subtitle}
-            {step === 2 && t.s2.subtitle}
-            {step === 3 && t.s3.subtitle}
-            {step === 4 && t.s4.subtitle}
-            {step === 5 && t.s5.subtitle}
-            {step === 6 && t.s6.subtitle}
-            {step === 7 && t.s7.subtitle}
-            {step === 8 && t.s8.subtitle}
-            {step === 9 && t.s9.subtitle}
+            {step === 1 && t.s3.subtitle}
+            {step === 2 && t.s5.subtitle}
+            {step === 3 && t.s6.subtitle}
+            {step === 4 && t.s7.subtitle}
           </p>
         </div>
 
         {/* Body */}
         <div className="flex flex-1 flex-col px-5 py-6 relative z-10">
-          {/* Step 1 — Language */}
+          {/* Step 1 — Caregiver name */}
           {step === 1 && (
-            <div className="space-y-3">
-              {(["en", "ms"] as Lang[]).map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLang(l)}
-                  className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all ${
-                    lang === l
-                      ? "border-yellow-500 bg-yellow-50"
-                      : "border-gray-100 bg-gray-50 hover:border-gray-200"
-                  }`}
-                >
-                  <span className="text-3xl">{l === "en" ? "🇬🇧" : "🇲🇾"}</span>
-                  <div>
-                    <p className={`font-semibold ${lang === l ? "text-yellow-600" : "text-gray-800"}`}>
-                      {l === "en" ? "English" : "Bahasa Malaysia"}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {l === "en" ? "Respond in English" : "Balas dalam Bahasa Malaysia"}
-                    </p>
-                  </div>
-                  {lang === l && (
-                    <span className="ml-auto text-yellow-500">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Step 2 — Phone */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <div className="rounded-2xl bg-yellow-50 p-4 text-sm text-yellow-600">
-                📱 This number will be used to connect your WhatsApp with KAI.
-              </div>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-white">{t.s2.label}</span>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={e => set("phone", e.target.value)}
-                  placeholder={t.s2.placeholder}
-                  className="h-12 w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 text-base text-white placeholder-gray-300 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
-                />
-              </label>
-            </div>
-          )}
-
-          {/* Step 3 — Caregiver name */}
-          {step === 3 && (
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-white">{t.s3.label}</span>
               <input
@@ -276,30 +209,8 @@ export default function Onboarding() {
             </label>
           )}
 
-          {/* Step 4 — Relationship */}
-          {step === 4 && (
-            <div className="grid grid-cols-2 gap-3">
-              {t.relationships.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => set("relationship", r)}
-                  className={`rounded-2xl border-2 p-4 text-center transition-all ${
-                    form.relationship === r
-                      ? "border-yellow-500 bg-yellow-50 text-yellow-600"
-                      : "border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-200"
-                  }`}
-                >
-                  <span className="mb-1 block text-2xl">
-                    {["👨‍👩‍👦", "💑", "👴", "🧑‍🤝‍🧑"][t.relationships.indexOf(r)]}
-                  </span>
-                  <span className="text-sm font-medium">{r}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Step 5 — Patient details */}
-          {step === 5 && (
+          {/* Step 2 — Patient details */}
+          {step === 2 && (
             <div className="space-y-4">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-white">{t.s5.nameLbl}</span>
@@ -325,8 +236,8 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 6 — Condition */}
-          {step === 6 && (
+          {/* Step 3 — Condition */}
+          {step === 3 && (
             <div className="grid grid-cols-2 gap-3">
               {(["🩸", "❤️", "🧠", "💭", "🏥"] as const).map((icon, i) => {
                 const c = t.conditions[i];
@@ -348,8 +259,8 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 7 — Medications */}
-          {step === 7 && (
+          {/* Step 4 — Medications */}
+          {step === 4 && (
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-white">{t.s7.label}</span>
               <textarea
@@ -362,61 +273,6 @@ export default function Onboarding() {
             </label>
           )}
 
-          {/* Step 8 — Check-in time */}
-          {step === 8 && (
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-white">{t.s8.label}</span>
-                <input
-                  type="text"
-                  value={form.checkInTime}
-                  onChange={e => set("checkInTime", e.target.value)}
-                  placeholder={t.s8.placeholder}
-                  className="h-12 w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 text-base text-white placeholder-gray-300 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
-                />
-              </label>
-              <div className="space-y-2">
-                {["8am", "9am", "12pm", "6pm", "9pm"].map(t => (
-                  <button
-                    key={t}
-                    onClick={() => set("checkInTime", `${t} and 6pm`)}
-                    className="mr-2 rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-sm text-gray-300 hover:border-yellow-400 hover:bg-yellow-400 hover:text-gray-900"
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 9 — Emergency contact */}
-          {step === 9 && (
-            <div className="space-y-4">
-              <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
-                ⚠️ KAI will alert this person if an emergency is detected.
-              </div>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-white">{t.s9.nameLbl}</span>
-                <input
-                  type="text"
-                  value={form.familyName}
-                  onChange={e => set("familyName", e.target.value)}
-                  placeholder={t.s9.namePH}
-                  className="h-12 w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 text-base text-white placeholder-gray-300 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-white">{t.s9.phoneLbl}</span>
-                <input
-                  type="tel"
-                  value={form.familyPhone}
-                  onChange={e => set("familyPhone", e.target.value)}
-                  placeholder={t.s9.phonePH}
-                  className="h-12 w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 text-base text-white placeholder-gray-300 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
-                />
-              </label>
-            </div>
-          )}
         </div>
 
         {/* Bottom nav */}
@@ -428,14 +284,6 @@ export default function Onboarding() {
                 className="flex h-12 flex-1 items-center justify-center rounded-xl border border-slate-700 text-sm font-sans font-medium text-gray-300 hover:bg-slate-800"
               >
                 {t.back}
-              </button>
-            )}
-            {step === 9 && (
-              <button
-                onClick={handleNext}
-                className="flex h-12 flex-1 items-center justify-center rounded-xl border border-slate-700 text-sm font-sans font-medium text-gray-300 hover:bg-slate-800"
-              >
-                {t.skip}
               </button>
             )}
             <button

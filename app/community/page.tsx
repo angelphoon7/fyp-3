@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter, usePathname } from "next/navigation";
+import { save, load, hydrate, KEYS } from "@/app/lib/store";
 import PixelSnow from "../onboarding/PixelSnow";
 import Dock from "../home/bottom widget/Dock";
 import PostCard, { PostProps } from "./PostCard";
+import { ScrollPickerColumn, PICKER_H } from "@/components/ScrollPickerColumn";
 
 const mockPosts: PostProps[] = [
   {
@@ -74,18 +76,6 @@ const mockPosts: PostProps[] = [
   }
 ];
 
-const communityGroups = [
-  { id: '1', name: 'Morning Shift', image: '/morning.jpeg', color: 'from-orange-400 to-yellow-400' },
-  { id: '3', name: 'Penang Area', image: '/penang.jpeg', color: 'from-blue-400 to-cyan-400' },
-  { id: '4', name: 'Dementia Care', image: '/dementia.jpg', color: 'from-pink-400 to-rose-400' },
-  { id: 'bakery', name: 'Bakery', image: '/cake.jpeg', color: 'from-amber-500 to-orange-400' },
-  { id: 'add', name: 'New Group', icon: (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-    </svg>
-  ), color: 'from-white/20 to-white/5' },
-];
 
 const mockChats: Record<string, { sender: string; text: string; isMe: boolean; time: string; avatar?: string }[]> = {
   '1': [
@@ -111,34 +101,172 @@ export default function CommunityPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState("community");
-  const [activeChatGroupId, setActiveChatGroupId] = useState<string | null>(null);
-  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [isRequestingHelp, setIsRequestingHelp] = useState(false);
   const [feedFilter, setFeedFilter] = useState<"all" | "help">("all");
 
-  const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
+  const [posts, setPosts] = useState<PostProps[]>(mockPosts);
   const [postPhotos, setPostPhotos] = useState<string[]>([]);
+  const [postText, setPostText] = useState("");
+
+  const [reqDay, setReqDay] = useState("");
+  const [reqMonth, setReqMonth] = useState("");
+  const [reqYear, setReqYear] = useState("");
+  const [reqHour, setReqHour] = useState("");
+  const [reqMin, setReqMin] = useState("");
+  const [reqAmPm, setReqAmPm] = useState("AM");
+  const [reqLocation, setReqLocation] = useState("");
+
+  // scroll pickers
+  const COM_MONTHS   = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const COM_MONTH_KEYS = ["1","2","3","4","5","6","7","8","9","10","11","12"];
+  const COM_YEARS    = ["2025","2026","2027","2028"];
+  const COM_HOURS    = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+  const COM_MINUTES  = ["00","15","30","45"];
+  const COM_AMPM     = ["AM","PM"];
+
+  const [comDatePicker, setComDatePicker] = useState<{ day: string; month: string; year: string } | null>(null);
+  const [comTimePicker, setComTimePicker] = useState<{ hour: string; minute: string; ampm: string } | null>(null);
+
+  const openComDatePicker = () => {
+    const today = new Date();
+    setComDatePicker({
+      day:   reqDay   || String(today.getDate()).padStart(2, "0"),
+      month: reqMonth || String(today.getMonth() + 1),
+      year:  reqYear  || String(today.getFullYear()),
+    });
+  };
+  const confirmComDate = () => {
+    if (!comDatePicker) return;
+    setReqDay(String(Number(comDatePicker.day)));
+    setReqMonth(comDatePicker.month);
+    setReqYear(comDatePicker.year);
+    setComDatePicker(null);
+  };
+
+  const openComTimePicker = () => {
+    setComTimePicker({
+      hour:   reqHour  || "09",
+      minute: reqMin   || "00",
+      ampm:   reqAmPm  || "AM",
+    });
+  };
+  const confirmComTime = () => {
+    if (!comTimePicker) return;
+    setReqHour(String(Number(comTimePicker.hour)));
+    setReqMin(comTimePicker.minute);
+    setReqAmPm(comTimePicker.ampm);
+    setComTimePicker(null);
+  };
+
+  const comDateLabel = reqDay && reqMonth && reqYear
+    ? `${String(reqDay).padStart(2,"0")} ${COM_MONTHS[Number(reqMonth)-1]} ${reqYear}`
+    : "Select date";
+  const comTimeLabel = reqHour && reqMin
+    ? `${String(reqHour).padStart(2,"0")}:${reqMin} ${reqAmPm}`
+    : "Select time";
+  const [reqAge, setReqAge] = useState("");
+  const [reqCondition, setReqCondition] = useState("");
+  const [reqDetails, setReqDetails] = useState("");
+
+  const handlePostRequest = () => {
+    if (!reqDay || !reqMonth || !reqYear || !reqHour || !reqMin || !reqLocation || !reqAge || !reqCondition) return;
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const dateStr = `${months[Number(reqMonth)-1]} ${reqDay}, ${reqYear}`;
+    const timeStr = `${String(reqHour).padStart(2,"0")}:${reqMin} ${reqAmPm}`;
+    const newPost: PostProps = {
+      id: String(Date.now()),
+      user: { name: "Angel", avatar: "", trustRating: undefined },
+      time: "Just now",
+      type: "help",
+      helpDetails: {
+        date: dateStr,
+        time: timeStr,
+        location: reqLocation,
+        patientAge: reqAge,
+        condition: reqCondition,
+      },
+      caption: reqDetails || "Looking for shift cover.",
+      likes: 0,
+      comments: [],
+    };
+    setPosts(prev => {
+      const updated = [newPost, ...prev];
+      const userPosts = updated.filter(p => p.type === "help" && p.user.name === "Angel");
+      save(KEYS.shiftRequests, userPosts);
+      return updated;
+    });
+    setFeedFilter("help");
+    setIsRequestingHelp(false);
+    setReqDay(""); setReqMonth(""); setReqYear(""); setReqHour(""); setReqMin(""); setReqAmPm("AM");
+    setReqLocation(""); setReqAge(""); setReqCondition(""); setReqDetails("");
+  };
   
-  const groupPhotoInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const mockIds = new Set(mockPosts.map(p => p.id));
+    // Load from localStorage first (instant, no flash)
+    const localShifts = load<PostProps[]>(KEYS.shiftRequests, []);
+    const localPosts  = load<PostProps[]>(KEYS.communityPosts, []);
+    const localUser = [...localPosts, ...localShifts].filter(p => !mockIds.has(p.id));
+    if (localUser.length) {
+      setPosts(prev => {
+        const prevIds = new Set(prev.map(p => p.id));
+        const fresh = localUser.filter(p => !prevIds.has(p.id));
+        return fresh.length ? [...fresh, ...prev] : prev;
+      });
+    }
+    // Then sync from Supabase
+    hydrate().then(remote => {
+      const remoteShifts = (remote[KEYS.shiftRequests] as PostProps[] | undefined) ?? [];
+      const remotePosts  = (remote[KEYS.communityPosts] as PostProps[] | undefined) ?? [];
+      const allRemote = [...remotePosts, ...remoteShifts].filter(p => !mockIds.has(p.id));
+      if (allRemote.length) {
+        setPosts(prev => {
+          const prevIds = new Set(prev.map(p => p.id));
+          const fresh = allRemote.filter(p => !prevIds.has(p.id));
+          return fresh.length ? [...fresh, ...prev] : prev;
+        });
+      }
+    });
+  }, []);
+
   const postPhotoInputRef = useRef<HTMLInputElement>(null);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string | null>>) => {
-    if (e.target.files && e.target.files[0]) {
-      const url = URL.createObjectURL(e.target.files[0]);
-      setter(url);
-    }
-  };
-
   const handleMultiplePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const urls = Array.from(e.target.files).map(f => URL.createObjectURL(f));
-      setPostPhotos(prev => [...prev, ...urls]);
-    }
+    if (!e.target.files) return;
+    Array.from(e.target.files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        if (ev.target?.result) setPostPhotos(prev => [...prev, ev.target!.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = "";
   };
 
-  const activeChatData = activeChatGroupId ? communityGroups.find(g => g.id === activeChatGroupId) : null;
-  const activeMessages = activeChatGroupId ? (mockChats[activeChatGroupId] || []) : [];
+  const handlePost = () => {
+    if (!postText.trim() && postPhotos.length === 0) return;
+    const newPost: PostProps = {
+      id: String(Date.now()),
+      user: { name: "Angel", avatar: "" },
+      time: "Just now",
+      imageUrl: postPhotos[0],
+      caption: postText.trim() || "",
+      likes: 0,
+      comments: [],
+    };
+    setPosts(prev => {
+      const updated = [newPost, ...prev];
+      const mockIds = new Set(mockPosts.map(p => p.id));
+      const toSave = updated.filter(p => !mockIds.has(p.id) && p.type !== "help");
+      save(KEYS.communityPosts, toSave);
+      return updated;
+    });
+    setPostText("");
+    setPostPhotos([]);
+    setIsCreatingPost(false);
+    setFeedFilter("all");
+  };
 
   const navItems = [
     {
@@ -232,34 +360,6 @@ export default function CommunityPage() {
             </div>
           </header>
 
-          {/* Group Chat Communities (Stories Style) */}
-          <div className="w-full border-b border-white/5 bg-black/10 backdrop-blur-md pt-4 pb-2">
-            <div className="flex gap-4 overflow-x-auto scrollbar-hide px-4 pb-2">
-              {communityGroups.map((group) => (
-                <div 
-                  key={group.id} 
-                  onClick={() => {
-                    if (group.id === 'add') setIsCreatingGroup(true);
-                    else setActiveChatGroupId(group.id);
-                  }} 
-                  className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group"
-                >
-                  <div className={`p-[2px] rounded-full bg-gradient-to-tr ${group.color} transition-transform group-active:scale-95 shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
-                    <div className="h-16 w-16 rounded-full bg-[#121212] flex items-center justify-center border-2 border-black relative overflow-hidden shadow-[inset_0_1px_5px_rgba(255,255,255,0.1)]">
-                      <div className="absolute inset-0 bg-white/5" />
-                      {(group as any).image ? (
-                        <img src={(group as any).image} alt={group.name} className={`h-full w-full object-cover z-10 ${(group as any).imagePosition || 'object-center'}`} />
-                      ) : (
-                        <span className="text-3xl drop-shadow-md z-10">{group.icon}</span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-medium text-white/80 tracking-wide">{group.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Feed Filter Segmented Control */}
           <div className="px-4 pt-4 pb-2">
             <div className="flex p-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]">
@@ -281,7 +381,7 @@ export default function CommunityPage() {
 
           {/* Feed */}
           <div className="px-4 py-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {mockPosts
+            {posts
               .filter(post => feedFilter === "all" ? post.type !== "help" : post.type === "help")
               .map((post) => (
                 <PostCard key={post.id} post={post} />
@@ -310,166 +410,20 @@ export default function CommunityPage() {
           </div>
         </div>
 
-        {/* Chat Overlay */}
-        {activeChatGroupId && activeChatData && (
-          <div className="absolute inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-3xl animate-in slide-in-from-bottom duration-300">
-            {/* Chat Header */}
-            <header className="flex items-center justify-between px-4 py-3 bg-white/5 border-b border-white/10 pt-12 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setActiveChatGroupId(null)} className="p-2 -ml-2 text-white/80 hover:text-white transition-colors">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m15 18-6-6 6-6"/>
-                  </svg>
-                </button>
-                <div className="flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-full bg-gradient-to-tr ${activeChatData.color} p-[2px]`}>
-                    <img src={(activeChatData as any).image} alt="" className="h-full w-full rounded-full object-cover" />
-                  </div>
-                  <div>
-                    <h2 className="text-white font-bold text-sm tracking-wide">{activeChatData.name}</h2>
-                    <p className="text-[10px] text-white/50">{activeMessages.length + 5} participants</p>
-                  </div>
-                </div>
-              </div>
-              <button className="p-2 text-white/80 hover:text-white">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-              </button>
-            </header>
-
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide pb-24">
-              <div className="text-center">
-                <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider bg-white/5 px-3 py-1 rounded-full border border-white/5">
-                  Today
-                </span>
-              </div>
-              
-              {activeMessages.map((msg, i) => (
-                <div key={i} className={`flex w-full ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex gap-2 max-w-[80%] ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                    {!msg.isMe && msg.avatar && (
-                      <img src={msg.avatar} alt="" className="h-8 w-8 rounded-full object-cover shrink-0 mt-auto shadow-sm" />
-                    )}
-                    <div className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-                      {!msg.isMe && (
-                        <span className="text-[11px] font-medium text-white/50 ml-1 mb-1">{msg.sender}</span>
-                      )}
-                      <div className={`px-4 py-2.5 rounded-2xl ${msg.isMe ? 'bg-gradient-to-br from-pink-500 to-rose-600 text-white rounded-br-sm shadow-[0_4px_15px_rgba(244,114,182,0.3)]' : 'bg-white/10 backdrop-blur-md text-white/90 rounded-bl-sm border border-white/10 shadow-sm'}`}>
-                        <p className="text-sm leading-snug">{msg.text}</p>
-                      </div>
-                      <span className="text-[10px] text-white/40 mt-1">{msg.time}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Chat Input */}
-            <div className="absolute bottom-0 inset-x-0 p-4 bg-black/60 border-t border-white/10 backdrop-blur-xl pb-8 z-10">
-              <div className="flex items-center gap-2">
-                <button className="p-2 text-white/50 hover:text-white transition-colors shrink-0">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-                </button>
-                <div className="flex-1 relative">
-                  <input type="text" placeholder="Message..." className="w-full bg-white/10 border border-white/10 rounded-full pl-4 pr-10 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 focus:bg-white/15 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" />
-                  <button className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 bg-pink-500 hover:bg-pink-400 transition-colors rounded-full text-white shadow-md">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Create Group Overlay */}
-        {isCreatingGroup && (
-          <div className="absolute inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-3xl animate-in slide-in-from-bottom duration-300">
-            {/* Header */}
-            <header className="flex items-center justify-between px-6 py-4 bg-white/5 border-b border-white/10 pt-14 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-              <button onClick={() => setIsCreatingGroup(false)} className="text-white/60 hover:text-white transition-colors text-sm font-medium">
-                Cancel
-              </button>
-              <h2 className="text-white font-bold text-base tracking-wide">New Group</h2>
-              <div className="w-12" /> {/* Spacer for centering */}
-            </header>
-
-            {/* Form */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-32 scrollbar-hide">
-              {/* Image Upload Area */}
-              <div className="flex flex-col items-center gap-3">
-                <input type="file" ref={groupPhotoInputRef} hidden accept="image/*" onChange={e => handlePhotoUpload(e, setGroupPhoto)} />
-                <div 
-                  onClick={() => groupPhotoInputRef.current?.click()}
-                  className="h-28 w-28 rounded-full border-2 border-dashed border-white/20 bg-white/5 flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors shadow-[inset_0_4px_20px_rgba(0,0,0,0.4)] overflow-hidden"
-                >
-                  {groupPhoto ? (
-                    <img src={groupPhoto} alt="Group" className="h-full w-full object-cover" />
-                  ) : (
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/40">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                      <circle cx="8.5" cy="8.5" r="1.5"/>
-                      <polyline points="21 15 16 10 5 21"/>
-                    </svg>
-                  )}
-                </div>
-                <span className="text-xs text-white/50 font-medium tracking-wide">Add Group Photo</span>
-              </div>
-
-              {/* Inputs */}
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Group Name</label>
-                  <input type="text" placeholder="e.g., Weekend Respite Care" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-yellow-400/50 focus:bg-white/10 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Category</label>
-                  <div className="relative">
-                    <select className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white focus:outline-none focus:border-yellow-400/50 focus:bg-white/10 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] appearance-none">
-                      <option value="" className="bg-slate-900">Select a category...</option>
-                      <option value="medical" className="bg-slate-900">Medical Support</option>
-                      <option value="casual" className="bg-slate-900">Casual / Social</option>
-                      <option value="local" className="bg-slate-900">Local Meetups</option>
-                      <option value="advice" className="bg-slate-900">Tips & Advice</option>
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Description</label>
-                  <textarea placeholder="What is this group about?" rows={4} className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-yellow-400/50 focus:bg-white/10 transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] resize-none" />
-                </div>
-              </div>
-            </div>
-
-            {/* Footer Action */}
-            <div className="absolute bottom-0 inset-x-0 p-6 bg-black/60 border-t border-white/10 backdrop-blur-xl z-10">
-              <button 
-                onClick={() => setIsCreatingGroup(false)}
-                className="w-full bg-yellow-400 hover:bg-yellow-500 text-slate-900 font-bold text-[15px] py-4 rounded-2xl shadow-[0_0_20px_rgba(250,204,21,0.3)] transition-all active:scale-[0.98]"
-              >
-                Create Group
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Create Post Overlay */}
         {isCreatingPost && (
           <div className="absolute inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-3xl animate-in slide-in-from-bottom duration-300">
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 bg-white/5 border-b border-white/10 pt-14 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-              <button onClick={() => setIsCreatingPost(false)} className="text-white/60 hover:text-white transition-colors text-sm font-medium">
+              <button onClick={() => { setIsCreatingPost(false); setPostText(""); setPostPhotos([]); }} className="text-white/60 hover:text-white transition-colors text-sm font-medium">
                 Cancel
               </button>
               <h2 className="text-white font-bold text-base tracking-wide">New Post</h2>
               <div className="w-12 text-right">
-                <button 
-                  onClick={() => setIsCreatingPost(false)}
-                  className="text-yellow-400 font-bold text-[15px] hover:text-yellow-300 transition-colors drop-shadow-[0_0_8px_rgba(250,204,21,0.3)]"
+                <button
+                  onClick={handlePost}
+                  disabled={!postText.trim() && postPhotos.length === 0}
+                  className="text-yellow-400 font-bold text-[15px] hover:text-yellow-300 transition-colors drop-shadow-[0_0_8px_rgba(250,204,21,0.3)] disabled:opacity-30"
                 >
                   Post
                 </button>
@@ -480,18 +434,20 @@ export default function CommunityPage() {
             <div className="flex-1 p-6 space-y-6 flex flex-col">
               {/* User Info */}
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-full p-[2px] border border-white/20 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)]">
-                  <img src="/avatar.jpg" alt="Angel" className="h-full w-full rounded-full object-cover" />
+                <div className="h-11 w-11 rounded-full border border-white/20 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] bg-gradient-to-br from-yellow-400/80 to-amber-600/80 flex items-center justify-center">
+                  <span className="text-[15px] font-bold text-black/80">A</span>
                 </div>
                 <span className="text-white font-bold text-[15px] tracking-wide">Angel</span>
               </div>
               
               {/* Text Input */}
-              <textarea 
-                placeholder="Share your caregiving journey, ask a question, or post an update..." 
-                rows={6} 
+              <textarea
+                placeholder="Share your caregiving journey, ask a question, or post an update..."
+                rows={6}
                 autoFocus
-                className="w-full bg-transparent text-white text-[17px] placeholder:text-white/30 focus:outline-none resize-none leading-relaxed flex-shrink-0" 
+                value={postText}
+                onChange={e => setPostText(e.target.value)}
+                className="w-full bg-transparent text-white text-[17px] placeholder:text-white/30 focus:outline-none resize-none leading-relaxed flex-shrink-0"
               />
               
               {/* Photo Upload Area (Shopee/Instagram Style) */}
@@ -543,58 +499,129 @@ export default function CommunityPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-32 scrollbar-hide">
               {/* User Reputation Preview */}
               <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full p-[2px] border border-amber-500/30">
-                  <img src="/avatar.jpg" alt="Angel" className="h-full w-full rounded-full object-cover" />
+                <div className="h-12 w-12 rounded-full border border-amber-500/30 bg-gradient-to-br from-yellow-400/80 to-amber-600/80 flex items-center justify-center">
+                  <span className="text-[16px] font-bold text-black/80">A</span>
                 </div>
                 <div>
-                  <p className="text-xs text-amber-200/70 uppercase tracking-widest font-bold mb-0.5">Your Trust Rating</p>
-                  <p className="text-[15px] font-bold text-amber-400 flex items-center gap-1.5">
-                    ⭐ 5.0 <span className="text-xs text-amber-400/60 font-medium">(Senior Caregiver)</span>
-                  </p>
+                  <p className="text-xs text-amber-200/70 uppercase tracking-widest font-bold mb-0.5">Posting as</p>
+                  <p className="text-[15px] font-bold text-white">Angel</p>
                 </div>
               </div>
 
               {/* Form Inputs */}
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  {/* Date picker bottom sheet */}
+                  {comDatePicker && (() => {
+                    const daysInMonth = new Date(Number(comDatePicker.year), Number(comDatePicker.month), 0).getDate();
+                    const dayItems = Array.from({ length: daysInMonth }, (_, i) => String(i + 1).padStart(2, "0"));
+                    return (
+                      <div className="fixed inset-0 z-[200] flex items-end" onClick={() => setComDatePicker(null)}>
+                        <div className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+                          <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
+                          <p className="text-sm font-bold text-white text-center">Select Date</p>
+                          <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                            {([
+                              { label: "Day",   items: dayItems,       display: undefined,  key: "day"   as const },
+                              { label: "Month", items: COM_MONTH_KEYS, display: COM_MONTHS, key: "month" as const },
+                              { label: "Year",  items: COM_YEARS,      display: undefined,  key: "year"  as const },
+                            ] as const).map(col => (
+                              <div key={col.key} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>{col.label}</span>
+                                <ScrollPickerColumn
+                                  items={col.items as unknown as string[]}
+                                  displayItems={col.display as unknown as string[] | undefined}
+                                  value={comDatePicker[col.key]}
+                                  onChange={v => setComDatePicker(p => p && ({ ...p, [col.key]: v }))}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <button onClick={confirmComDate} className="w-full py-3 rounded-xl bg-amber-400 text-black font-bold text-sm">Confirm</button>
+                          <button onClick={() => setComDatePicker(null)} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm">Cancel</button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Time picker bottom sheet */}
+                  {comTimePicker && (
+                    <div className="fixed inset-0 z-[200] flex items-end" onClick={() => setComTimePicker(null)}>
+                      <div className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
+                        <p className="text-sm font-bold text-white text-center">Select Time</p>
+                        <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Hour</span>
+                            <ScrollPickerColumn items={COM_HOURS} value={comTimePicker.hour} onChange={h => setComTimePicker(p => p && ({ ...p, hour: h }))} />
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: PICKER_H, paddingTop: 22, color: "#fff", fontSize: 24, fontWeight: 700 }}>:</div>
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Min</span>
+                            <ScrollPickerColumn items={COM_MINUTES} value={comTimePicker.minute} onChange={m => setComTimePicker(p => p && ({ ...p, minute: m }))} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>AM/PM</span>
+                            <ScrollPickerColumn items={COM_AMPM} value={comTimePicker.ampm} onChange={a => setComTimePicker(p => p && ({ ...p, ampm: a }))} />
+                          </div>
+                        </div>
+                        <button onClick={confirmComTime} className="w-full py-3 rounded-xl bg-amber-400 text-black font-bold text-sm">Confirm</button>
+                        <button onClick={() => setComTimePicker(null)} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Date</label>
-                    <input type="date" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white focus:outline-none focus:border-amber-400/50 transition-all appearance-none" />
+                    <button
+                      onClick={openComDatePicker}
+                      className="w-full bg-[#1a1a1a] border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-left flex items-center justify-between"
+                    >
+                      <span className={reqDay && reqMonth && reqYear ? "text-white" : "text-white/30"}>{comDateLabel}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </button>
                   </div>
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Time</label>
-                    <input type="time" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white focus:outline-none focus:border-amber-400/50 transition-all appearance-none" />
+                    <button
+                      onClick={openComTimePicker}
+                      className="w-full bg-[#1a1a1a] border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-left flex items-center justify-between"
+                    >
+                      <span className={reqHour && reqMin ? "text-white" : "text-white/30"}>{comTimeLabel}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </button>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Location</label>
-                  <input type="text" placeholder="e.g., Bayan Lepas, Penang" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
+                  <input type="text" value={reqLocation} onChange={e => setReqLocation(e.target.value)} placeholder="e.g., Bayan Lepas, Penang" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2 col-span-1">
                     <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Age</label>
-                    <input type="number" placeholder="72" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
+                    <input type="number" value={reqAge} onChange={e => setReqAge(e.target.value)} placeholder="72" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
                   </div>
                   <div className="space-y-2 col-span-2">
                     <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Main Condition</label>
-                    <input type="text" placeholder="e.g., Dementia Stage 2" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
+                    <input type="text" value={reqCondition} onChange={e => setReqCondition(e.target.value)} placeholder="e.g., Dementia Stage 2" className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all" />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[11px] font-bold text-white/40 uppercase tracking-wider pl-1">Specific Needs / Details</label>
-                  <textarea placeholder="Any specific instructions for the shift..." rows={4} className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all resize-none" />
+                  <textarea value={reqDetails} onChange={e => setReqDetails(e.target.value)} placeholder="Any specific instructions for the shift..." rows={4} className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-[15px] text-white placeholder:text-white/30 focus:outline-none focus:border-amber-400/50 transition-all resize-none" />
                 </div>
               </div>
             </div>
 
             {/* Footer */}
             <div className="absolute bottom-0 inset-x-0 p-6 bg-black/60 border-t border-white/10 backdrop-blur-xl z-10">
-              <button 
-                onClick={() => setIsRequestingHelp(false)}
-                className="w-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold text-[15px] py-4 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all active:scale-[0.98]"
+              <button
+                onClick={handlePostRequest}
+                disabled={!reqDay || !reqMonth || !reqYear || !reqHour || !reqMin || !reqLocation || !reqAge || !reqCondition}
+                className="w-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold text-[15px] py-4 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.3)] transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Post Request
               </button>

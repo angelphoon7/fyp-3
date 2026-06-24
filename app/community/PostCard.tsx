@@ -35,6 +35,16 @@ export default function PostCard({ post }: { post: PostProps }) {
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [offerSent, setOfferSent] = useState(false);
+
+  const initials = post.user.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+  const handleOfferHelp = () => {
+    setOfferSent(true);
+    setShowOfferModal(false);
+  };
 
   const handleLike = () => {
     setIsLiked(!isLiked);
@@ -46,8 +56,12 @@ export default function PostCard({ post }: { post: PostProps }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 px-2">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 overflow-hidden rounded-full border border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.2)]">
-            <img src={post.user.avatar} alt={post.user.name} className="h-full w-full object-cover" />
+          <div className="h-10 w-10 overflow-hidden rounded-full border border-white/40 shadow-[0_0_10px_rgba(255,255,255,0.2)] flex items-center justify-center bg-gradient-to-br from-yellow-400/80 to-amber-600/80">
+            {post.user.avatar && !avatarError ? (
+              <img src={post.user.avatar} alt={post.user.name} className="h-full w-full object-cover" onError={() => setAvatarError(true)} />
+            ) : (
+              <span className="text-[13px] font-bold text-black/80">{initials}</span>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -111,12 +125,15 @@ export default function PostCard({ post }: { post: PostProps }) {
             </div>
           </div>
           
-          <button className="w-full mt-6 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(245,158,11,0.3)]">
-            Offer Help
+          <button
+            onClick={() => !offerSent && setShowOfferModal(true)}
+            className={`w-full mt-6 font-bold py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(245,158,11,0.3)] ${offerSent ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-default" : "bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black"}`}
+          >
+            {offerSent ? "✓ Offer Sent" : "Offer Help"}
           </button>
         </div>
       ) : post.imageUrl ? (
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-white/20 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] bg-black/20 mt-2">
+        <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-white/20 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] bg-black/20 mt-2">
           <img 
             src={post.imageUrl} 
             alt="Post content" 
@@ -209,6 +226,53 @@ export default function PostCard({ post }: { post: PostProps }) {
           </div>
         )}
       </div>
+
+      {/* Offer Help Modal */}
+      {showOfferModal && post.helpDetails && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowOfferModal(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-md rounded-t-3xl bg-[#1a1a1a] border-t border-white/10 p-6 pb-10 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-6" />
+            <h2 className="text-lg font-bold text-white mb-1">Confirm Your Offer</h2>
+            <p className="text-sm text-white/50 mb-5">You're offering to cover this shift for {post.user.name}</p>
+
+            <div className="space-y-3 mb-6 bg-white/5 rounded-2xl p-4 border border-white/10">
+              <div className="flex justify-between text-sm">
+                <span className="text-white/50">Date</span>
+                <span className="text-white font-medium">{post.helpDetails.date}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/50">Time</span>
+                <span className="text-white font-medium">{post.helpDetails.time}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/50">Location</span>
+                <span className="text-white font-medium">{post.helpDetails.location}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/50">Patient</span>
+                <span className="text-white font-medium">{post.helpDetails.patientAge}y • {post.helpDetails.condition}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleOfferHelp}
+              className="w-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold py-3.5 rounded-xl transition-all active:scale-[0.98]"
+            >
+              Confirm Offer
+            </button>
+            <button
+              onClick={() => setShowOfferModal(false)}
+              className="w-full mt-3 text-white/50 hover:text-white text-sm font-medium py-2 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

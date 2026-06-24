@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openai } from "@/whatsapp/openai-client";
 
+export const maxDuration = 30;
+
 export interface ReceiptItem {
   name: string;
   qty?: number;
@@ -8,6 +10,7 @@ export interface ReceiptItem {
 }
 
 export interface ReceiptResult {
+  isGroceries: boolean;
   store: string;
   date: string;
   items: ReceiptItem[];
@@ -18,12 +21,17 @@ export interface ReceiptResult {
   claimSummary: string;
 }
 
-const PROMPT = `You are a receipt parser. Look at this receipt image and return structured JSON.
+const PROMPT = `You are a grocery receipt parser. Examine this receipt image carefully.
+
+STEP 1 — Classify: Is this a receipt from a grocery store, supermarket, hypermarket, mini-market, wet market, or convenience store (places that sell household food & daily necessities)? Set "isGroceries" to true only for these. Set it to false for restaurants, food courts, cafés, medical clinics, pharmacies, hardware stores, clothing shops, electronics stores, petrol stations, and any other non-grocery establishment.
+
+STEP 2 — Parse: Extract the receipt details.
 
 Return ONLY valid JSON with no markdown or extra text:
 {
+  "isGroceries": true,
   "store": "Store name or Unknown",
-  "date": "YYYY-MM-DD or empty string if not found",
+  "date": "",
   "items": [
     { "name": "Item name", "qty": 1, "price": 5.90 }
   ],
@@ -38,6 +46,8 @@ Rules:
 - All prices as numbers (not strings)
 - Omit qty if not shown
 - currency defaults to MYR unless clearly stated otherwise
+- Always set "date" to empty string — date will be set by the user
+- If isGroceries is false, you may leave items empty and set totals to 0
 - claimSummary should be professional, suitable for a family expense claim`;
 
 export async function POST(req: NextRequest) {

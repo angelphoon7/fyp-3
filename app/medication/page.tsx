@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { ScrollPickerColumn, PICKER_H } from "@/components/ScrollPickerColumn";
 import IPhone13Frame from "@/components/iPhone13Frame";
 import { useRouter } from "next/navigation";
 import ReflectiveCard from "@/app/patient_caring/ReflectiveCard";
-import { save, load, hydrate, KEYS } from "@/app/lib/store";
+import { save, load, hydrate, resetDailyData, KEYS } from "@/app/lib/store";
 
 type Schedule = {
   id: string;
-  period: "Morning" | "Afternoon" | "Evening" | "Night";
+  period: string;
   time: string;
   taken: boolean;
   takenAt?: string;
@@ -21,14 +22,15 @@ type Medication = {
   schedules: Schedule[];
 };
 
-const PERIOD_META: Record<Schedule["period"], { icon: string; default: string }> = {
-  Morning:   { icon: "🌅", default: "08:00" },
-  Afternoon: { icon: "☀️", default: "13:00" },
-  Evening:   { icon: "🌆", default: "18:00" },
-  Night:     { icon: "🌙", default: "21:00" },
-};
+const INTAKE_LABELS   = ["1st Intake", "2nd Intake", "3rd Intake", "4th Intake", "5th Intake"];
+const INTAKE_ICONS    = ["🌅", "☀️", "🌆", "🌙", "⭐"];
+const INTAKE_DEFAULTS = ["08:00", "13:00", "18:00", "21:00", "23:00"];
 
-const ALL_PERIODS = Object.keys(PERIOD_META) as Schedule["period"][];
+// backward-compat icon lookup for old Morning/Evening period labels
+const PERIOD_ICONS: Record<string, string> = {
+  "1st Intake": "🌅", "2nd Intake": "☀️", "3rd Intake": "🌆", "4th Intake": "🌙", "5th Intake": "⭐",
+  Morning: "🌅", Afternoon: "☀️", Evening: "🌆", Night: "🌙",
+};
 
 function uid() {
   return Math.random().toString(36).slice(2);
@@ -38,14 +40,14 @@ export default function MedicationPage() {
   const router = useRouter();
 
   const [hydrated, setHydrated] = useState(false);
-  const [medications, setMedications] = useState<Medication[]>(() => load(KEYS.medications, [
+  const defaultMedications: Medication[] = [
     {
       id: uid(),
       name: "Metformin",
       dosage: "500mg",
       schedules: [
-        { id: uid(), period: "Morning",   time: "08:00", taken: false },
-        { id: uid(), period: "Evening",   time: "18:00", taken: false },
+        { id: uid(), period: "1st Intake", time: "08:00", taken: false },
+        { id: uid(), period: "2nd Intake", time: "18:00", taken: false },
       ],
     },
     {
@@ -53,37 +55,67 @@ export default function MedicationPage() {
       name: "Amlodipine",
       dosage: "5mg",
       schedules: [
-        { id: uid(), period: "Morning",   time: "08:00", taken: false },
+        { id: uid(), period: "1st Intake", time: "08:00", taken: false },
       ],
     },
-  ]));
+  ];
+  const [medications, setMedications] = useState<Medication[]>(defaultMedications);
 
   // --- add medication sheet ---
-  const [addOpen, setAddOpen]           = useState(false);
-  const [newName, setNewName]           = useState("");
-  const [newDosage, setNewDosage]       = useState("");
-  const [selectedPeriods, setSelectedPeriods] = useState<Set<Schedule["period"]>>(new Set(["Morning"]));
-  const [periodTimes, setPeriodTimes]   = useState<Record<string, string>>({
-    Morning: "08:00", Afternoon: "13:00", Evening: "18:00", Night: "21:00",
-  });
+  const [addOpen, setAddOpen]   = useState(false);
+  const [newName, setNewName]   = useState("");
+  const [newDosage, setNewDosage] = useState("");
+  const [activeTimes, setActiveTimes] = useState<string[]>(["08:00"]);
 
-  const togglePeriod = (p: Schedule["period"]) => {
-    setSelectedPeriods(prev => {
-      const next = new Set(prev);
-      next.has(p) ? next.delete(p) : next.add(p);
-      return next;
-    });
+  // time picker bottom sheet
+  const HOURS   = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
+  const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
+  const AMPM    = ["AM", "PM"];
+
+  const to12h = (hour24: string) => {
+    const h = Number(hour24);
+    if (h === 0)  return { hour12: "12", ampm: "AM" };
+    if (h < 12)   return { hour12: String(h).padStart(2, "0"), ampm: "AM" };
+    if (h === 12) return { hour12: "12", ampm: "PM" };
+    return { hour12: String(h - 12).padStart(2, "0"), ampm: "PM" };
+  };
+
+  const fmt12h = (time24: string) => {
+    const [h, m] = time24.split(":");
+    const { hour12, ampm } = to12h(h);
+    return `${hour12}:${m} ${ampm}`;
+  };
+  const to24h = (hour12: string, ampm: string) => {
+    let h = Number(hour12);
+    if (ampm === "AM" && h === 12) h = 0;
+    if (ampm === "PM" && h !== 12) h += 12;
+    return String(h).padStart(2, "0");
+  };
+
+  const [timePicker, setTimePicker] = useState<{ intakeIdx: number; hour: string; minute: string; ampm: string } | null>(null);
+
+  const openTimePicker = (intakeIdx: number, currentTime: string) => {
+    const [h, m] = currentTime.split(":");
+    const { hour12, ampm } = to12h(h);
+    const snapped = MINUTES.reduce((p, c) => Math.abs(Number(c) - Number(m)) < Math.abs(Number(p) - Number(m)) ? c : p);
+    setTimePicker({ intakeIdx, hour: hour12, minute: snapped, ampm });
+  };
+  const confirmTimePicker = () => {
+    if (!timePicker) return;
+    const hour24 = to24h(timePicker.hour, timePicker.ampm);
+    setActiveTimes(prev => prev.map((t, i) => i === timePicker.intakeIdx ? `${hour24}:${timePicker.minute}` : t));
+    setTimePicker(null);
   };
 
   const addMedication = () => {
-    if (!newName.trim() || selectedPeriods.size === 0) return;
-    const schedules: Schedule[] = ALL_PERIODS
-      .filter(p => selectedPeriods.has(p))
-      .map(p => ({ id: uid(), period: p, time: periodTimes[p], taken: false }));
+    if (!newName.trim() || activeTimes.length === 0) return;
+    const schedules: Schedule[] = activeTimes.map((time, i) => ({
+      id: uid(), period: INTAKE_LABELS[i], time, taken: false,
+    }));
     setMedications(prev => [...prev, { id: uid(), name: newName.trim(), dosage: newDosage.trim(), schedules }]);
     setNewName("");
     setNewDosage("");
-    setSelectedPeriods(new Set(["Morning"]));
+    setActiveTimes(["08:00"]);
     setAddOpen(false);
   };
 
@@ -110,6 +142,9 @@ export default function MedicationPage() {
   };
 
   useEffect(() => {
+    resetDailyData();
+    const local = load(KEYS.medications, []);
+    if (local.length) setMedications(local);
     hydrate().then((data) => {
       if (data[KEYS.medications]?.length) setMedications(data[KEYS.medications]);
       setHydrated(true);
@@ -128,6 +163,33 @@ export default function MedicationPage() {
   return (
     <IPhone13Frame>
       <div className="relative h-dvh w-full flex-1 overflow-hidden bg-black text-white font-sans p-4 pt-10 pb-6 flex flex-col justify-center">
+
+        {/* Time picker bottom sheet */}
+        {timePicker && (
+          <div className="absolute inset-0 z-[60] flex items-end" onClick={() => setTimePicker(null)}>
+            <div className="w-full bg-[#111] border-t border-white/10 rounded-t-3xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto" />
+              <p className="text-sm font-bold text-white text-center">Set Time — {INTAKE_LABELS[timePicker.intakeIdx]}</p>
+              <div style={{ display: "flex", flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Hour</span>
+                  <ScrollPickerColumn items={HOURS} value={timePicker.hour} onChange={h => setTimePicker(p => p && ({ ...p, hour: h }))} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: PICKER_H, paddingTop: 22, color: "#fff", fontSize: 24, fontWeight: 700 }}>:</div>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>Minute</span>
+                  <ScrollPickerColumn items={MINUTES} value={timePicker.minute} onChange={m => setTimePicker(p => p && ({ ...p, minute: m }))} />
+                </div>
+                <div style={{ width: 56, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>AM/PM</span>
+                  <ScrollPickerColumn items={AMPM} value={timePicker.ampm} onChange={a => setTimePicker(p => p && ({ ...p, ampm: a }))} />
+                </div>
+              </div>
+              <button onClick={confirmTimePicker} className="w-full py-3 rounded-xl bg-yellow-400 text-black font-bold text-sm">Confirm</button>
+              <button onClick={() => setTimePicker(null)} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm">Cancel</button>
+            </div>
+          </div>
+        )}
 
         {/* Add medication bottom sheet */}
         {addOpen && (
@@ -161,36 +223,50 @@ export default function MedicationPage() {
                 />
               </div>
 
-              {/* Period selector + time */}
+              {/* Intake timing */}
               <div className="space-y-1">
                 <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Timing</label>
                 <div className="space-y-2">
-                  {ALL_PERIODS.map(p => {
-                    const active = selectedPeriods.has(p);
-                    return (
-                      <div key={p} className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-colors ${active ? "bg-yellow-400/10 border-yellow-400/30" : "bg-white/5 border-white/10"}`}>
-                        <button className="flex items-center gap-2 flex-1" onClick={() => togglePeriod(p)}>
-                          <span className="text-base">{PERIOD_META[p].icon}</span>
-                          <span className={`text-sm font-medium ${active ? "text-yellow-100" : "text-white/50"}`}>{p}</span>
+                  {activeTimes.map((time, idx) => (
+                    <div key={idx} className="flex items-center justify-between rounded-xl border px-4 py-3 bg-yellow-400/10 border-yellow-400/30">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{INTAKE_ICONS[idx]}</span>
+                        <span className="text-sm font-medium text-yellow-100">{INTAKE_LABELS[idx]}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openTimePicker(idx, time)}
+                          className="flex items-center gap-1.5 text-yellow-300 text-sm font-bold"
+                        >
+                          {fmt12h(time)}
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                         </button>
-                        {active && (
-                          <input
-                            type="time"
-                            value={periodTimes[p]}
-                            onChange={e => setPeriodTimes(prev => ({ ...prev, [p]: e.target.value }))}
-                            className="bg-transparent text-yellow-300 text-sm font-bold outline-none"
-                            onClick={e => e.stopPropagation()}
-                          />
+                        {idx > 0 && (
+                          <button
+                            onClick={() => setActiveTimes(prev => prev.filter((_, i) => i !== idx))}
+                            className="h-5 w-5 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white/40 hover:text-red-400 transition-colors"
+                          >
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                          </button>
                         )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
+                  {activeTimes.length < 5 && (
+                    <button
+                      onClick={() => setActiveTimes(prev => [...prev, INTAKE_DEFAULTS[prev.length]])}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-white/20 text-white/40 text-sm font-medium hover:border-yellow-400/30 hover:text-yellow-300 transition-colors"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Add {INTAKE_LABELS[activeTimes.length]}
+                    </button>
+                  )}
                 </div>
               </div>
 
               <button
                 onClick={addMedication}
-                disabled={!newName.trim() || selectedPeriods.size === 0}
+                disabled={!newName.trim() || activeTimes.length === 0}
                 className="w-full py-3.5 rounded-xl bg-yellow-400 text-black font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
               >
                 Add Medication
@@ -286,7 +362,7 @@ export default function MedicationPage() {
                         <div className="border-t border-white/10 divide-y divide-white/5">
                           {med.schedules.map(sched => (
                             <div key={sched.id} className="flex items-center gap-3 px-4 py-3">
-                              <span className="text-base shrink-0">{PERIOD_META[sched.period].icon}</span>
+                              <span className="text-base shrink-0">{PERIOD_ICONS[sched.period] ?? "💊"}</span>
 
                               <div className="flex-1 min-w-0">
                                 <p className="text-[12px] font-semibold text-white/70">{sched.period}</p>

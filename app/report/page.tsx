@@ -9,7 +9,7 @@ import type { HealthSummaryResult } from "@/app/api/health-summary/route";
 // ── types mirroring each feature page ────────────────────────────────────────
 
 type CareLog  = { label: string; time: string; image?: string };
-type CareTask = { id: string; name: string; icon: string; logs: CareLog[] };
+type CareTask = { id: string; name: string; icon: string; logs: CareLog[]; targetLogs?: number };
 
 type MedSchedule = { id: string; period: string; time: string; taken: boolean; takenAt?: string };
 type Medication  = { id: string; name: string; dosage: string; schedules: MedSchedule[] };
@@ -17,7 +17,7 @@ type Medication  = { id: string; name: string; dosage: string; schedules: MedSch
 type Appointment = { id: string; hospital: string; date: string; time: string; notes: string };
 
 type HouseLog  = { label: string; time: string; image?: string };
-type HouseTask = { id: string; name: string; icon: string; logs: HouseLog[] };
+type HouseTask = { id: string; name: string; icon: string; logs: HouseLog[]; targetLogs?: number };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -93,7 +93,7 @@ export default function ReportPage() {
 
   // ── derived stats ─────────────────────────────────────────────────────────
 
-  const careCompleted  = careTasks.filter(t => t.logs.length > 0).length;
+  const careCompleted  = careTasks.filter(t => t.logs.length >= (t.targetLogs ?? 1)).length;
   const careTotal      = careTasks.length;
 
   const medTotal  = medications.reduce((s, m) => s + m.schedules.length, 0);
@@ -105,7 +105,7 @@ export default function ReportPage() {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 3);
 
-  const houseCompleted = householdTasks.filter(t => t.logs.length > 0).length;
+  const houseCompleted = householdTasks.filter(t => t.logs.length >= (t.targetLogs ?? 1)).length;
   const houseTotal     = householdTasks.length;
 
   // Simple overall score: care 40% + medication 40% + household 20%
@@ -374,32 +374,23 @@ export default function ReportPage() {
         <div className="flex flex-col flex-1 overflow-y-auto pb-10">
 
           {/* Header — glass pill matching Home Dashboard */}
-          <div className="relative mx-4 mt-12 mb-1 rounded-[22px]"
-            style={{
-              background: 'linear-gradient(135deg, rgba(180,180,180,0.13) 0%, rgba(120,120,120,0.08) 100%)',
-              backdropFilter: 'blur(40px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-              border: '1px solid rgba(255,255,255,0.18)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -1px 1px rgba(0,0,0,0.15)'
-            }}
-          >
-            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+          <div className="relative mx-4 mt-12 mb-1 rounded-[22px] bg-white border border-gray-100 shadow-sm">
             <div className="relative flex items-center gap-3 px-5 py-4">
               <button
                 onClick={() => router.push("/home")}
-                className="h-8 w-8 rounded-full bg-white/8 border border-white/15 flex items-center justify-center shrink-0 active:bg-white/15 transition-colors"
+                className="h-8 w-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0 active:bg-gray-200 transition-colors"
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
               </button>
               <div className="flex-1 min-w-0">
-                <p className="text-white/40 text-[9px] font-semibold tracking-[0.22em] uppercase mb-0.5">Report</p>
-                <h1 className="text-[20px] font-bold tracking-tight text-white leading-none">Health Report</h1>
+                <p className="text-gray-400 text-[9px] font-semibold tracking-[0.22em] uppercase mb-0.5">Report</p>
+                <h1 className="text-[20px] font-bold tracking-tight text-gray-900 leading-none">Health Report</h1>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => { setSendOpen(true); setSent(false); }}
                   disabled={!hasAnyData || !contacts.length}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-300 text-xs font-medium active:bg-blue-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 text-xs font-medium active:bg-blue-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 3 2 12l7 3"/><path d="m9 15 5 7 8-19"/></svg>
                   Share
@@ -407,7 +398,7 @@ export default function ReportPage() {
                 <button
                   onClick={downloadPDF}
                   disabled={!hasAnyData || downloading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/8 border border-white/15 text-white/60 text-xs font-medium active:bg-white/15 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 border border-gray-200 text-gray-600 text-xs font-medium active:bg-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   {downloading ? (
                     <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
@@ -423,7 +414,7 @@ export default function ReportPage() {
           <div className="flex flex-col gap-3 p-4">
 
             {/* Overall Score */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4 flex items-center gap-4">
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 flex items-center gap-4">
               <div className="relative h-14 w-14 shrink-0">
                 <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
                   <circle cx="18" cy="18" r="15.9" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
@@ -435,16 +426,16 @@ export default function ReportPage() {
                     strokeLinecap="round"
                   />
                 </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white/70">
+                <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-700">
                   {hasAnyData ? overallScore : "—"}
                 </span>
               </div>
               <div>
-                <p className="text-[10px] text-white/35 font-medium mb-0.5">Overall Care Score</p>
-                <p className="text-lg font-semibold text-white">
+                <p className="text-[10px] text-gray-400 font-medium mb-0.5">Overall Care Score</p>
+                <p className="text-lg font-semibold text-gray-900">
                   {!hasAnyData ? "No data yet" : overallScore >= 80 ? "Looking good" : overallScore >= 55 ? "On track" : "Getting started"}
                 </p>
-                <p className="text-[11px] text-white/30 mt-0.5">Based on today's activity</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Based on today's activity</p>
               </div>
             </div>
 
@@ -452,46 +443,44 @@ export default function ReportPage() {
             <div className="grid grid-cols-2 gap-3">
 
               {/* Care Tasks */}
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-base">🏥</span>
-                  <p className="text-[11px] text-white/40 font-medium">Patient Care</p>
+              <div className="rounded-2xl border border-gray-100 bg-gradient-to-b from-rose-50 to-white p-3.5 shadow-sm">
+                <div className="flex items-center mb-3">
+                  <p className="text-sm text-rose-600 font-bold tracking-[0.08em] uppercase">Patient Care</p>
                 </div>
                 {careTotal > 0 ? (
                   <>
-                    <p className="text-xl font-semibold text-white">{careCompleted}<span className="text-white/30 text-sm font-normal">/{careTotal}</span></p>
-                    <p className="text-[10px] text-white/30 mt-0.5 mb-2">tasks completed</p>
+                    <p className="text-xl font-semibold text-gray-900">{careCompleted}<span className="text-gray-400 text-sm font-normal">/{careTotal}</span></p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 mb-2">tasks completed</p>
                     <div className="space-y-1">
                       {careTasks.map(t => (
                         <div key={t.id} className="flex items-center justify-between text-[11px]">
-                          <span className="text-white/45">{t.icon} {t.name}</span>
-                          <span className={t.logs.length > 0 ? "text-emerald-400" : "text-white/20"}>
-                            {t.logs.length > 0 ? `✓` : "—"}
+                          <span className="text-gray-600 font-medium">{t.name}</span>
+                          <span className={t.logs.length >= (t.targetLogs ?? 1) ? "text-emerald-500" : "text-gray-300"}>
+                            {t.logs.length >= (t.targetLogs ?? 1) ? `✓` : `${t.logs.length}/${t.targetLogs ?? 1}`}
                           </span>
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
-                  <p className="text-[11px] text-white/20 italic mt-1">No tasks yet</p>
+                  <p className="text-[11px] text-gray-300 italic mt-1">No tasks yet</p>
                 )}
               </div>
 
               {/* Medication */}
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-base">💊</span>
-                  <p className="text-[11px] text-white/40 font-medium">Medication</p>
+              <div className="rounded-2xl border border-gray-100 bg-gradient-to-b from-indigo-50 to-white p-3.5 shadow-sm">
+                <div className="flex items-center mb-3">
+                  <p className="text-sm text-indigo-600 font-bold tracking-[0.08em] uppercase">Medication</p>
                 </div>
                 {medTotal > 0 ? (
                   <>
-                    <p className="text-xl font-semibold text-white">{medPct}<span className="text-white/30 text-sm font-normal">%</span></p>
-                    <p className="text-[10px] text-white/30 mt-0.5 mb-2">{medTaken}/{medTotal} doses taken</p>
+                    <p className="text-xl font-semibold text-gray-900">{medPct}<span className="text-gray-400 text-sm font-normal">%</span></p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 mb-2">{medTaken}/{medTotal} doses taken</p>
                     <div className="space-y-1">
                       {medications.map(m => (
                         <div key={m.id} className="flex items-center justify-between text-[11px]">
-                          <span className="text-white/45 truncate pr-1">{m.name}</span>
-                          <span className={m.schedules.every(s => s.taken) ? "text-emerald-400" : "text-white/40"}>
+                          <span className="text-gray-600 truncate pr-1">{m.name}</span>
+                          <span className={m.schedules.every(s => s.taken) ? "text-emerald-500" : "text-gray-500"}>
                             {m.schedules.filter(s => s.taken).length}/{m.schedules.length}
                           </span>
                         </div>
@@ -499,69 +488,69 @@ export default function ReportPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-[11px] text-white/20 italic mt-1">No medications</p>
+                  <p className="text-[11px] text-gray-300 italic mt-1">No medications</p>
                 )}
               </div>
 
               {/* Household */}
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-base">🏠</span>
-                  <p className="text-[11px] text-white/40 font-medium">Household</p>
+              <div className="rounded-2xl border border-gray-100 bg-gradient-to-b from-amber-50 to-white p-3.5 shadow-sm">
+                <div className="flex items-center mb-3">
+                  <p className="text-sm text-amber-600 font-bold tracking-[0.08em] uppercase">Household</p>
                 </div>
                 {houseTotal > 0 ? (
                   <>
-                    <p className="text-xl font-semibold text-white">{houseCompleted}<span className="text-white/30 text-sm font-normal">/{houseTotal}</span></p>
-                    <p className="text-[10px] text-white/30 mt-0.5 mb-2">tasks done</p>
+                    <p className="text-xl font-semibold text-gray-900">{houseCompleted}<span className="text-gray-400 text-sm font-normal">/{houseTotal}</span></p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 mb-2">tasks done</p>
                     <div className="space-y-1">
                       {householdTasks.map(t => (
                         <div key={t.id} className="flex items-center justify-between text-[11px]">
-                          <span className="text-white/45">{t.icon} {t.name}</span>
-                          <span className={t.logs.length > 0 ? "text-emerald-400" : "text-white/20"}>
-                            {t.logs.length > 0 ? "✓" : "—"}
+                          <span className="text-gray-600 font-medium">{t.name}</span>
+                          <span className={t.logs.length >= (t.targetLogs ?? 1) ? "text-emerald-500" : "text-gray-300"}>
+                            {t.logs.length >= (t.targetLogs ?? 1) ? "✓" : `${t.logs.length}/${t.targetLogs ?? 1}`}
                           </span>
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
-                  <p className="text-[11px] text-white/20 italic mt-1">No tasks yet</p>
+                  <p className="text-[11px] text-gray-300 italic mt-1">No tasks yet</p>
                 )}
               </div>
 
               {/* Appointments */}
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <span className="text-base">📅</span>
-                  <p className="text-[11px] text-white/40 font-medium">Appointments</p>
+              <div className="rounded-2xl border border-gray-100 bg-gradient-to-b from-cyan-50 to-white p-3.5 shadow-sm">
+                <div className="flex items-center mb-3">
+                  <p className="text-sm text-cyan-600 font-bold tracking-[0.08em] uppercase">Appointments</p>
                 </div>
                 {upcomingAppts.length > 0 ? (
                   <div className="space-y-2">
                     {upcomingAppts.map(a => (
                       <div key={a.id}>
-                        <p className="text-[11px] font-medium text-white/75 truncate">{a.hospital}</p>
-                        <p className="text-[10px] text-white/35 mt-0.5">{formatDate(a.date)} · {formatTime(a.time)}</p>
+                        <p className="text-[11px] font-medium text-gray-800 truncate">{a.hospital}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{formatDate(a.date)} · {formatTime(a.time)}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[11px] text-white/20 italic mt-1">No upcoming visits</p>
+                  <p className="text-[11px] text-gray-300 italic mt-1">No upcoming visits</p>
                 )}
               </div>
             </div>
 
             {/* Pending doses */}
             {medications.some(m => m.schedules.some(s => !s.taken)) && (
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
-                <p className="text-[11px] text-white/40 font-medium mb-2.5">Pending doses</p>
+              <div className="rounded-2xl border border-gray-100 bg-gradient-to-b from-yellow-50 to-white p-3.5 shadow-sm">
+                <div className="flex items-center mb-3">
+                  <p className="text-sm text-yellow-600 font-bold tracking-[0.08em] uppercase">Pending doses</p>
+                </div>
                 <div className="space-y-2">
                   {medications.flatMap(m =>
                     m.schedules
                       .filter(s => !s.taken)
                       .map(s => (
                         <div key={s.id} className="flex justify-between items-center text-[11px]">
-                          <span className="text-white/60">{m.name} <span className="text-white/25">{m.dosage}</span></span>
-                          <span className="text-white/40">{s.period} · {s.time}</span>
+                          <span className="text-gray-700">{m.name} <span className="text-gray-400">{m.dosage}</span></span>
+                          <span className="text-gray-500">{s.period} · {s.time}</span>
                         </div>
                       ))
                   )}
@@ -570,17 +559,16 @@ export default function ReportPage() {
             )}
 
             {/* AI Health Summary */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
+            <div className="rounded-2xl border border-gray-100 bg-gradient-to-b from-emerald-50 to-white p-3.5 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[11px] text-white/40 font-medium">Care summary</p>
-                <span className="text-[10px] text-white/20">Gemini 2.5</span>
+                <p className="text-sm text-emerald-600 font-bold tracking-[0.08em] uppercase">Care summary</p>
               </div>
 
               {!aiSummary && !generating && (
                 <button
                   onClick={generateSummary}
                   disabled={!hasAnyData}
-                  className="w-full py-3 rounded-xl border border-yellow-400/30 bg-yellow-400/10 text-yellow-300 text-sm font-bold hover:bg-yellow-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="w-full py-3 rounded-xl border border-yellow-500/40 bg-yellow-400/10 text-yellow-600 text-sm font-bold hover:bg-yellow-400/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Generate Report Summary
                 </button>
@@ -589,7 +577,7 @@ export default function ReportPage() {
               {generating && (
                 <div className="flex items-center gap-2 py-3">
                   <svg className="animate-spin shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgb(250 204 21)" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                  <span className="text-sm text-white/50">Analysing health data...</span>
+                  <span className="text-sm text-gray-500">Analysing health data...</span>
                 </div>
               )}
 
@@ -601,15 +589,15 @@ export default function ReportPage() {
                   <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold ${scoreBg(aiSummary.score)}`}>
                     <span className={scoreColor(aiSummary.score)}>●</span>
                     <span className={scoreColor(aiSummary.score)}>{aiSummary.overallStatus}</span>
-                    <span className="text-white/30">· {aiSummary.score}/100</span>
+                    <span className="text-gray-400">· {aiSummary.score}/100</span>
                   </div>
 
-                  <p className="text-sm text-white/70 leading-relaxed">{aiSummary.summary}</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{aiSummary.summary}</p>
 
                   {aiSummary.highlights.length > 0 && (
                     <div className="space-y-1">
                       {aiSummary.highlights.map((h, i) => (
-                        <div key={i} className="flex items-start gap-2 text-[12px] text-emerald-400">
+                        <div key={i} className="flex items-start gap-2 text-[12px] text-emerald-700">
                           <span className="mt-0.5 shrink-0">✓</span><span>{h}</span>
                         </div>
                       ))}
@@ -619,7 +607,7 @@ export default function ReportPage() {
                   {/* Meal Recommendations */}
                   {aiSummary.meals?.length > 0 && (
                     <div>
-                      <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-2.5">Suggested Meals Today</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-2.5">Suggested Meals Today</p>
                       <div className="-mx-4 px-4">
                         <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                           {aiSummary.meals.map((meal, i) => (
@@ -666,7 +654,11 @@ export default function ReportPage() {
 
             {!hasAnyData && (
               <div className="text-center py-8">
-                <p className="text-3xl mb-3">📋</p>
+                <div className="flex justify-center mb-3">
+                  <div className="h-12 w-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/40">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+                  </div>
+                </div>
                 <p className="text-sm text-white/40">No activity logged yet.</p>
                 <p className="text-xs text-white/25 mt-1">Start tracking from Patient Caring, Medication, or Household.</p>
               </div>
