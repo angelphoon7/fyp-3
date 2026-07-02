@@ -316,7 +316,6 @@ export default function HomeDashboard() {
                               </div>
                               <div>
                                 <p className="text-sm font-semibold text-white">{caregiver.name}</p>
-                                <p className="text-xs text-white/60">{caregiver.experience} exp • {caregiver.fee}</p>
                               </div>
                             </div>
                           );

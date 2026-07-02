@@ -21,11 +21,22 @@ export interface ReceiptResult {
   claimSummary: string;
 }
 
-const PROMPT = `You are a grocery receipt parser. Examine this receipt image carefully.
+const PROMPT = `You are a precise grocery receipt OCR parser. Read the receipt image character-by-character — do NOT guess or paraphrase item names.
 
-STEP 1 — Classify: Is this a receipt from a grocery store, supermarket, hypermarket, mini-market, wet market, or convenience store (places that sell household food & daily necessities)? Set "isGroceries" to true only for these. Set it to false for restaurants, food courts, cafés, medical clinics, pharmacies, hardware stores, clothing shops, electronics stores, petrol stations, and any other non-grocery establishment.
+STEP 1 — Classify: Is this a receipt from a grocery store, supermarket, hypermarket, mini-market, wet market, or convenience store? Set "isGroceries" to true only for these. False for restaurants, cafés, clinics, pharmacies, hardware stores, clothing, electronics, petrol stations.
 
-STEP 2 — Parse: Extract the receipt details.
+STEP 2 — Extract every line item following these exact rules:
+
+ITEM EXTRACTION RULES:
+1. Read each item name EXACTLY as printed — preserve abbreviations like "INSP", "EXTR", "PIL", "CHAI". Do not rename, correct spelling, or combine words differently.
+2. For items with "N @ X.XX = Y.YY" format (e.g. "2 @ 19.90  39.80"): set qty=N, price=Y.YY (the TOTAL amount, not unit price).
+3. For repeated barcode lines (same barcode appearing multiple times): create ONE item entry with qty = number of repetitions and price = unit price × qty.
+4. Each distinct line item on the receipt must appear as exactly one entry in the items array — never skip items.
+5. price field must always be the TOTAL cost for that line (qty × unit). If only unit price is shown with qty=1, price = unit price.
+
+VALIDATION (do this before returning):
+- Sum all item prices. If the sum does not match the receipt TOTAL, recheck each item's price — you likely swapped two prices or missed an item.
+- Common mistake: swapping prices between adjacent items (e.g. 59.90 and 9.90 assigned to wrong items). Read each price on the SAME line as its item name.
 
 Return ONLY valid JSON with no markdown or extra text:
 {
@@ -33,7 +44,7 @@ Return ONLY valid JSON with no markdown or extra text:
   "store": "Store name or Unknown",
   "date": "",
   "items": [
-    { "name": "Item name", "qty": 1, "price": 5.90 }
+    { "name": "Item name exactly as on receipt", "qty": 1, "price": 5.90 }
   ],
   "subtotal": 0.00,
   "tax": 0.00,
@@ -42,9 +53,9 @@ Return ONLY valid JSON with no markdown or extra text:
   "claimSummary": "2-3 sentence summary: what was bought, total spent, and why it should be reimbursed"
 }
 
-Rules:
+Additional rules:
 - All prices as numbers (not strings)
-- Omit qty if not shown
+- Omit qty if 1 and not explicitly shown
 - currency defaults to MYR unless clearly stated otherwise
 - Always set "date" to empty string — date will be set by the user
 - If isGroceries is false, you may leave items empty and set totals to 0
@@ -58,7 +69,7 @@ export async function POST(req: NextRequest) {
     const base64 = image.includes(",") ? image.split(",")[1] : image;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [{
         role: "user",
         content: [

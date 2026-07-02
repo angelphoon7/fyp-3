@@ -384,7 +384,22 @@ export default function CommunityPage() {
             {posts
               .filter(post => feedFilter === "all" ? post.type !== "help" : post.type === "help")
               .map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onDelete={() => setPosts(prev => prev.filter(p => p.id !== post.id))}
+                  onLike={(newCount) => {
+                    setPosts(prev => {
+                      const updated = prev.map(p => p.id === post.id ? { ...p, likes: newCount } : p);
+                      const mockIds = new Set(mockPosts.map(p => p.id));
+                      const toSavePosts = updated.filter(p => !mockIds.has(p.id) && p.type !== "help");
+                      const toSaveShifts = updated.filter(p => !mockIds.has(p.id) && p.type === "help");
+                      save(KEYS.communityPosts, toSavePosts);
+                      save(KEYS.shiftRequests, toSaveShifts);
+                      return updated;
+                    });
+                  }}
+                />
               ))}
           </div>
         </div>

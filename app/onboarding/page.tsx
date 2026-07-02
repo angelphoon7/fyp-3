@@ -87,6 +87,7 @@ export default function Onboarding() {
   const [lang, setLang] = useState<Lang>("en");
   const [copied, setCopied] = useState<"number" | "code" | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>({
@@ -126,6 +127,20 @@ export default function Onboarding() {
   };
 
   const handleNext = async () => {
+    if (step === 1) {
+      setSubmitting(true);
+      try {
+        const res = await fetch(`/api/onboard?name=${encodeURIComponent(form.caregiverName)}`);
+        const data = res.ok ? await res.json().catch(() => ({})) : {};
+        if (data.taken) {
+          setNameError("This name is already taken. Please choose a different name.");
+          return;
+        }
+        setNameError(null);
+      } finally {
+        setSubmitting(false);
+      }
+    }
     if (step < TOTAL_STEPS) { setStep(s => s + 1); return; }
     // Final step — save profile
     setSubmitting(true);
@@ -201,11 +216,14 @@ export default function Onboarding() {
               <input
                 type="text"
                 value={form.caregiverName}
-                onChange={e => set("caregiverName", e.target.value)}
+                onChange={e => { set("caregiverName", e.target.value); setNameError(null); }}
                 placeholder={t.s3.placeholder}
-                className="h-12 w-full rounded-xl border border-slate-700 bg-slate-800/60 px-4 text-base text-white placeholder-gray-300 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
+                className={`h-12 w-full rounded-xl border bg-slate-800/60 px-4 text-base text-white placeholder-gray-300 outline-none focus:ring-2 ${nameError ? "border-red-400 focus:border-red-400 focus:ring-red-100" : "border-slate-700 focus:border-yellow-400 focus:ring-yellow-100"}`}
                 autoFocus
               />
+              {nameError && (
+                <p className="mt-2 text-sm text-red-400">{nameError}</p>
+              )}
             </label>
           )}
 

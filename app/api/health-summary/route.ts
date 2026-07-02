@@ -40,11 +40,17 @@ export async function POST(req: NextRequest) {
   try {
     const { careTasks, medications, appointments, householdTasks } = await req.json();
 
-    const prompt = `You are a warm, caring companion helping a family caregiver look after their loved one. You write like a supportive friend — natural, kind, and grounded. You do NOT give medical advice, medication instructions, or act like a doctor. Never recommend specific drugs, doses, or supplements.
+    const hasCareTasks   = Array.isArray(careTasks)      && careTasks.length > 0;
+    const hasMedications = Array.isArray(medications)     && medications.length > 0;
+    const hasAppts       = Array.isArray(appointments)    && appointments.length > 0;
+    const hasHouseTasks  = Array.isArray(householdTasks)  && householdTasks.length > 0;
+    const hasLimitedData = !hasCareTasks && !hasMedications && !hasAppts && !hasHouseTasks;
 
-Here is today's activity data:
+    const prompt = `You are a warm, caring companion helping a family caregiver look after their elderly loved one. You write like a supportive friend — natural, kind, and grounded. You do NOT give medical advice, medication instructions, or act like a doctor. Never recommend specific drugs, doses, or supplements.
 
-CARE TASKS (bathing, dressing, feeding):
+Here is today's caregiving activity data:
+
+CARE TASKS (bathing, dressing, feeding, mobility support):
 ${JSON.stringify(careTasks ?? [], null, 2)}
 
 MEDICATIONS (reference only — do NOT advise on medications):
@@ -56,7 +62,16 @@ ${JSON.stringify(appointments ?? [], null, 2)}
 HOUSEHOLD TASKS:
 ${JSON.stringify(householdTasks ?? [], null, 2)}
 
-Write a short daily check-in and recommend 3 meals for the caregiver to cook for their loved one today. Meals should be soft, easy-to-digest, and nourishing — suitable for an elderly person or someone who needs daily care. Be warm and practical.
+${hasLimitedData ? "NOTE: Very little activity has been logged today. Generate general elderly-friendly meal suggestions that are safe and nourishing for most elderly patients." : "Use the care tasks and daily activity above to personalise the meal recommendations to the patient's needs today."}
+
+Write a short daily check-in and recommend EXACTLY 3 meals for the caregiver to prepare for their loved one today.
+
+Meal selection rules:
+- Base each meal on the patient's health condition and today's caregiving activity (e.g. if the patient had physiotherapy, suggest high-protein meals; if they seem low-energy, suggest warming, easily digestible foods)
+- If data is limited, default to general elderly-friendly soft meals that are safe and nourishing
+- All meals must be soft, easy-to-chew, easy-to-digest, and appropriate for an elderly person
+- Each meal's "why" must explain specifically why it suits this patient's condition or today's activity
+- Meal names must be plain English searchable names (e.g. "Steamed Fish", "Pumpkin Soup", "Oatmeal Porridge")
 
 Return ONLY valid JSON with no markdown:
 {
@@ -79,10 +94,10 @@ Return ONLY valid JSON with no markdown:
 Rules:
 - overallStatus must be exactly "Good", "Fair", or "Needs Attention"
 - score is 0–100
+- Exactly 3 meals — no more, no less
 - Max 3 highlights
 - Never mention medications, drugs, supplements, or clinical terms
-- Meal names must be in plain English so they can be searched in a food database (e.g. "Steamed Fish", "Pumpkin Soup", "Oatmeal Porridge")
-- Write as if texting a caring friend, not writing a report`;
+- Write as if texting a caring friend, not writing a clinical report`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",

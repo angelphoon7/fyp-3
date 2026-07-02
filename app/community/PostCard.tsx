@@ -30,7 +30,7 @@ export interface PostProps {
   comments: Comment[];
 }
 
-export default function PostCard({ post }: { post: PostProps }) {
+export default function PostCard({ post, onDelete, onLike }: { post: PostProps; onDelete?: () => void; onLike?: (newCount: number) => void }) {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
@@ -38,6 +38,7 @@ export default function PostCard({ post }: { post: PostProps }) {
   const [avatarError, setAvatarError] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerSent, setOfferSent] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const initials = post.user.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -47,8 +48,11 @@ export default function PostCard({ post }: { post: PostProps }) {
   };
 
   const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikeCount(prev => (isLiked ? prev - 1 : prev + 1));
+    const nowLiked = !isLiked;
+    const newCount = nowLiked ? likeCount + 1 : likeCount - 1;
+    setIsLiked(nowLiked);
+    setLikeCount(newCount);
+    onLike?.(newCount);
   };
 
   return (
@@ -75,13 +79,32 @@ export default function PostCard({ post }: { post: PostProps }) {
             <p className="text-xs text-white/50">{post.time}</p>
           </div>
         </div>
-        <button className="text-white/50 hover:text-white transition-colors">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="1" />
-            <circle cx="19" cy="12" r="1" />
-            <circle cx="5" cy="12" r="1" />
-          </svg>
-        </button>
+        <div className="relative">
+          <button
+            className="text-white/50 hover:text-white transition-colors"
+            onClick={() => setShowMenu(prev => !prev)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="12" r="1" />
+              <circle cx="5" cy="12" r="1" />
+            </svg>
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 top-7 z-50 min-w-[130px] rounded-xl border border-white/10 bg-[#1a1a1a] shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  onClick={() => { setShowMenu(false); onDelete?.(); }}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-sm text-red-400 hover:bg-white/5 transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                  Delete post
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Dynamic Content Container */}

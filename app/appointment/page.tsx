@@ -36,6 +36,21 @@ function uid() {
   return Math.random().toString(36).slice(2);
 }
 
+function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.75): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
 export default function AppointmentPage() {
   const router = useRouter();
 
@@ -200,10 +215,11 @@ export default function AppointmentPage() {
 
   const analyzeReport = async (apptId: string, imageUrl: string) => {
     try {
+      const compressed = await compressImage(imageUrl);
       const res  = await fetch("/api/analyze-medical-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: imageUrl }),
+        body: JSON.stringify({ image: compressed }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
@@ -358,7 +374,7 @@ export default function AppointmentPage() {
                 <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Add New Contact</p>
                 <input
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-yellow-400/50"
-                  placeholder="Name (e.g. Mum)"
+                  placeholder="Name (e.g. Susan)"
                   value={newContactName}
                   onChange={e => setNewContactName(e.target.value)}
                 />

@@ -22,9 +22,9 @@ export function resetDailyData(): boolean {
     const careTasks = load<{ id: string; name: string; icon: string; logs: unknown[] }[]>(KEYS.careTasks, []);
     const resetCare = careTasks.map(t => ({ ...t, logs: [] }));
 
-    // Reset household task logs
-    const houseTasks = load<{ id: string; name: string; icon: string; logs: unknown[] }[]>(KEYS.householdTasks, []);
-    const resetHouse = houseTasks.map(t => ({ ...t, logs: [] }));
+    // Reset household task logs but keep logs that have receipt data (financial records)
+    const houseTasks = load<{ id: string; name: string; icon: string; logs: any[] }[]>(KEYS.householdTasks, []);
+    const resetHouse = houseTasks.map(t => ({ ...t, logs: t.logs.filter(log => log.receipt) }));
 
     // Reset medication taken flags
     const meds = load<{ id: string; name: string; dosage: string; schedules: { id: string; period: string; time: string; taken: boolean; takenAt?: string }[] }[]>(KEYS.medications, []);

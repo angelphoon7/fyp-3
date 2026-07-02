@@ -606,45 +606,43 @@ export default function ReportPage() {
 
                   {/* Meal Recommendations */}
                   {aiSummary.meals?.length > 0 && (
-                    <div>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-2.5">Suggested Meals Today</p>
-                      <div className="-mx-4 px-4">
-                        <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-                          {aiSummary.meals.map((meal, i) => (
-                            <div key={i} className="flex-none w-[185px] rounded-xl overflow-hidden border border-white/10 bg-slate-800/80">
-                              <div className="h-[110px] w-full overflow-hidden bg-slate-700/50">
-                                <img
-                                  src={meal.imageUrl}
-                                  alt={meal.name}
-                                  className="h-full w-full object-cover"
-                                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                />
-                              </div>
-                              <div className="p-3">
-                                <p className="text-[13px] font-bold text-white leading-snug">{meal.name}</p>
-                                <p className="text-[10px] text-white/40 mt-1 leading-relaxed line-clamp-2">{meal.description}</p>
-                                <div className="mt-2 pt-2 border-t border-white/[0.07]">
-                                  <p className="text-[10px] text-emerald-400/80 leading-relaxed">{meal.why}</p>
-                                </div>
-                              </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Suggested Meals Today</p>
+                      {aiSummary.meals.map((meal, i) => (
+                        <div key={i} className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
+                          <div className="flex gap-3 p-3">
+                            <div className="h-16 w-16 rounded-lg overflow-hidden bg-gray-100 shrink-0">
+                              <img
+                                src={meal.imageUrl}
+                                alt={meal.name}
+                                className="h-full w-full object-cover"
+                                onError={e => {
+                                  const el = e.target as HTMLImageElement;
+                                  el.style.display = "none";
+                                  el.parentElement!.innerHTML = `<div class="h-full w-full flex items-center justify-center text-2xl">🍽️</div>`;
+                                }}
+                              />
                             </div>
-                          ))}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-full px-1.5 py-0.5">Meal {i + 1}</span>
+                              </div>
+                              <p className="text-[13px] font-bold text-gray-900 leading-snug">{meal.name}</p>
+                              <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{meal.description}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1.5 px-3 py-2 bg-emerald-50 border-t border-emerald-100/60">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                            <p className="text-[11px] text-emerald-700 leading-relaxed">{meal.why}</p>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   )}
 
-                  {/* General tip */}
-                  {aiSummary.recommendation && (
-                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-                      <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">Today's Tip</p>
-                      <p className="text-[12px] text-white/55 leading-relaxed">{aiSummary.recommendation}</p>
-                    </div>
-                  )}
-
-                  <button
+<button
                     onClick={generateSummary}
-                    className="text-[11px] text-white/30 hover:text-white/60 transition-colors"
+                    className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     Regenerate
                   </button>

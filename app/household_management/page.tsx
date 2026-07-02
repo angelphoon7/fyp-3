@@ -41,6 +41,12 @@ export default function HouseholdManagementPage() {
   const [pickerTaskId, setPickerTaskId] = useState<string | null>(null);
   const [scanWarning, setScanWarning]   = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!scanWarning) return;
+    const timer = setTimeout(() => setScanWarning(null), 5000);
+    return () => clearTimeout(timer);
+  }, [scanWarning]);
+
   type DatePickerTarget = { taskId: string; logIdx: number; day: string; month: string; year: string };
   const [datePicker, setDatePicker] = useState<DatePickerTarget | null>(null);
 
@@ -56,6 +62,7 @@ export default function HouseholdManagementPage() {
     setDatePicker(null);
   };
 
+  const hasInteractedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- picker ---
@@ -107,6 +114,7 @@ export default function HouseholdManagementPage() {
 
   // --- log + receipt/meal analysis ---
   const addLog = (taskId: string, imageUrl?: string) => {
+    hasInteractedRef.current = true;
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     setTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t;
@@ -237,7 +245,9 @@ export default function HouseholdManagementPage() {
     const local = load(KEYS.householdTasks, []);
     if (local.length) setTasks(local);
     hydrate().then((data) => {
-      if (data[KEYS.householdTasks]?.length) setTasks(data[KEYS.householdTasks]);
+      if (data[KEYS.householdTasks]?.length && !hasInteractedRef.current) {
+        setTasks(data[KEYS.householdTasks]);
+      }
       setHydrated(true);
     });
   }, []);
