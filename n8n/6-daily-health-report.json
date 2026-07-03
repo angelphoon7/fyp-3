@@ -1,0 +1,60 @@
+{
+  "name": "KAI — 6. Daily Health Report (Telegram)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 20 * * *" }]
+        }
+      },
+      "id": "trigger-8pm",
+      "name": "Every Day 8PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.KAI_APP_URL }}/api/load-state",
+        "options": {}
+      },
+      "id": "fetch-state",
+      "name": "Fetch App State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $input.first().json;\nconst today = new Date().toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' });\n\nfunction fmt(n) { return (n || 0).toFixed(2); }\n\nconst careTasks = state.kai_care_tasks || [];\nconst medications = state.kai_medications || [];\nconst appointments = state.kai_appointments || [];\nconst householdTasks = state.kai_household_tasks || [];\n\n// Care tasks\nconst careCompleted = careTasks.filter(t => t.logs && t.logs.length > 0).length;\nconst careTotal = careTasks.length;\nconst carePending = careTasks.filter(t => !t.logs || t.logs.length === 0).map(t => t.name);\n\n// Medications\nconst medTotal = medications.reduce((s, m) => s + (m.schedules ? m.schedules.length : 0), 0);\nconst medTaken = medications.reduce((s, m) => s + (m.schedules ? m.schedules.filter(sc => sc.taken).length : 0), 0);\nconst medPct = medTotal > 0 ? Math.round((medTaken / medTotal) * 100) : 0;\nconst medMissed = medications.flatMap(m => (m.schedules || []).filter(sc => !sc.taken).map(sc => m.name + ' (' + sc.period + ')'));\n\n// Household\nconst houseCompleted = householdTasks.filter(t => t.logs && t.logs.length > 0).length;\nconst houseTotal = householdTasks.length;\n\n// Next appointment\nconst now = new Date();\nconst future = appointments.filter(a => new Date(a.date + 'T' + a.time) >= now);\nfuture.sort((a, b) => a.date.localeCompare(b.date));\nconst nextAppt = future[0];\n\n// Overall score\nconst overallScore = Math.round(\n  (careTotal > 0 ? (careCompleted / careTotal) * 40 : 0) +\n  (medTotal > 0 ? (medPct / 100) * 40 : 0) +\n  (houseTotal > 0 ? (houseCompleted / houseTotal) * 20 : 0)\n);\n\n// Status emoji based on score\nlet statusEmoji = '\\u2705';\nif (overallScore < 50) statusEmoji = '\\u26A0\\uFE0F';\nelse if (overallScore < 75) statusEmoji = '\\u{1F7E1}';\n\nconst lines = [\n  statusEmoji + ' KAI Daily Health Report',\n  '\\u{1F4C5} ' + today,\n  '',\n  '\\u{1F3AF} Overall Score: ' + overallScore + '/100',\n  '',\n  '\\u{1F3E5} Patient Care: ' + careCompleted + '/' + careTotal + ' tasks completed',\n];\n\nif (carePending.length > 0) {\n  lines.push('   \\u274C Missed: ' + carePending.join(', '));\n}\n\nlines.push('');\nlines.push('\\u{1F48A} Medication: ' + medPct + '% adherence (' + medTaken + '/' + medTotal + ' doses)');\n\nif (medMissed.length > 0) {\n  lines.push('   \\u274C Missed: ' + medMissed.slice(0, 5).join(', '));\n}\n\nlines.push('');\nlines.push('\\u{1F3E0} Household: ' + houseCompleted + '/' + houseTotal + ' tasks done');\nlines.push('');\n\nif (nextAppt) {\n  lines.push('\\u{1F4C6} Next Appointment: ' + nextAppt.hospital + ' on ' + nextAppt.date + ' at ' + nextAppt.time);\n} else {\n  lines.push('\\u{1F4C6} No upcoming appointments');\n}\n\nlines.push('');\nlines.push('\\u2014 Sent automatically by KAI at 8:00 PM');\n\nreturn [{ json: { message: lines.join('\\n') } }];"
+      },
+      "id": "format-health-report",
+      "name": "Format Health Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_HEALTH_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "send-health-report",
+      "name": "Send Health Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Every Day 8PM": { "main": [[{ "node": "Fetch App State", "type": "main", "index": 0 }]] },
+    "Fetch App State": { "main": [[{ "node": "Format Health Report", "type": "main", "index": 0 }]] },
+    "Format Health Report": { "main": [[{ "node": "Send Health Report", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "KAI" }]
+}
