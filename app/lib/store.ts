@@ -5,6 +5,7 @@ export const KEYS = {
   householdTasks: "kai_household_tasks",
   contacts:       "kai_contacts",
   shiftRequests:  "kai_shift_requests",
+  shiftOffers:    "kai_shift_offers",
   communityPosts: "kai_community_posts",
   lastResetDate:  "kai_last_reset_date",
 } as const;

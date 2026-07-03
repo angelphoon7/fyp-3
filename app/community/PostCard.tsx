@@ -1,6 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
+import { load, save, KEYS } from "@/app/lib/store";
+
+function currentCaregiverName(): string {
+  try {
+    const raw = localStorage.getItem("kai_user_profile");
+    return (raw ? JSON.parse(raw)?.caregiverName : "") || "You";
+  } catch {
+    return "You";
+  }
+}
 
 export interface Comment {
   id: string;
@@ -34,7 +44,6 @@ export default function PostCard({ post, onDelete, onLike }: { post: PostProps; 
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerSent, setOfferSent] = useState(false);
@@ -42,7 +51,33 @@ export default function PostCard({ post, onDelete, onLike }: { post: PostProps; 
 
   const initials = post.user.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
+  // Show "Offer Sent" if I already offered on this shift.
+  React.useEffect(() => {
+    if (post.type !== "help") return;
+    const me = currentCaregiverName();
+    const offers = load<any[]>(KEYS.shiftOffers, []);
+    if (offers.some(o => o.postId === String(post.id) && o.caregiverName === me)) setOfferSent(true);
+  }, [post.id, post.type]);
+
   const handleOfferHelp = () => {
+    if (post.helpDetails) {
+      const me = currentCaregiverName();
+      const shiftLabel = [post.helpDetails.date, post.helpDetails.time, post.helpDetails.location].filter(Boolean).join(" · ");
+      const offers = load<any[]>(KEYS.shiftOffers, []);
+      const already = offers.some(o => o.postId === String(post.id) && o.caregiverName === me);
+      if (!already) {
+        offers.push({
+          id: `${post.id}-${me}-${offers.length}`,
+          postId: String(post.id),
+          shiftLabel,
+          posterName: post.user.name,
+          caregiverName: me,
+          caregiverAvatar: "",
+          status: "pending",
+        });
+        save(KEYS.shiftOffers, offers); // persists to Firestore so the poster sees the offer
+      }
+    }
     setOfferSent(true);
     setShowOfferModal(false);
   };
@@ -70,11 +105,6 @@ export default function PostCard({ post, onDelete, onLike }: { post: PostProps; 
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-[15px] font-bold text-white drop-shadow-md">{post.user.name}</h3>
-              {post.user.trustRating && (
-                <span className="bg-yellow-400/20 text-yellow-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-yellow-400/30">
-                  {post.user.trustRating}
-                </span>
-              )}
             </div>
             <p className="text-xs text-white/50">{post.time}</p>
           </div>
@@ -185,24 +215,7 @@ export default function PostCard({ post, onDelete, onLike }: { post: PostProps; 
               <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
             </svg>
           </button>
-          <button className="group transition-transform active:scale-90 text-white/80 hover:text-white">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2 11 13" />
-              <path d="m22 2-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
         </div>
-        <button onClick={() => setIsSaved(!isSaved)} className="group transition-transform active:scale-90">
-          <svg 
-            width="24" height="24" viewBox="0 0 24 24" 
-            fill={isSaved ? "white" : "none"} 
-            stroke="currentColor" 
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className={`transition-colors duration-300 ${isSaved ? 'text-white' : 'text-white/80 group-hover:text-white'}`}
-          >
-            <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
-          </svg>
-        </button>
       </div>
 
       {/* Likes */}

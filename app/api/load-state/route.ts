@@ -8,6 +8,7 @@ const STATE_KEYS = [
   "kai_household_tasks",
   "kai_contacts",
   "kai_shift_requests",
+  "kai_shift_offers",
   "kai_community_posts",
 ];
 

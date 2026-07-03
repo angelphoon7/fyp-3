@@ -387,7 +387,17 @@ export default function CommunityPage() {
                 <PostCard
                   key={post.id}
                   post={post}
-                  onDelete={() => setPosts(prev => prev.filter(p => p.id !== post.id))}
+                  onDelete={() => {
+                    setPosts(prev => {
+                      const updated = prev.filter(p => p.id !== post.id);
+                      const mockIds = new Set(mockPosts.map(p => p.id));
+                      const toSavePosts = updated.filter(p => !mockIds.has(p.id) && p.type !== "help");
+                      const toSaveShifts = updated.filter(p => !mockIds.has(p.id) && p.type === "help");
+                      save(KEYS.communityPosts, toSavePosts);
+                      save(KEYS.shiftRequests, toSaveShifts);
+                      return updated;
+                    });
+                  }}
                   onLike={(newCount) => {
                     setPosts(prev => {
                       const updated = prev.map(p => p.id === post.id ? { ...p, likes: newCount } : p);

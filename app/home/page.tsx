@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import PixelSnow from "../onboarding/PixelSnow";
 import SpotlightCard from "./SpotlightCard";
 import Dock from "./bottom widget/Dock";
+import { load, save, hydrate, KEYS } from "@/app/lib/store";
 
 export default function HomeDashboard() {
   const router = useRouter();
@@ -23,36 +24,55 @@ export default function HomeDashboard() {
     } catch {}
   }, []);
 
-  // Mock data for shift requests
-  const [shiftRequests, setShiftRequests] = useState([
-    {
-      id: 1,
-      date: "Today, 8:00 PM - 2:00 AM",
-      patient: "Grandma Rose",
-      status: "confirmed",
-      responses: [
-        { id: 101, name: "Natasha", experience: "5 yrs", rating: 4.9, avatar: "/malay_caregiver.webp", fee: "$25/hr" },
-        { id: 102, name: "Mei Ling", experience: "8 yrs", rating: 5.0, avatar: "/aunty.avif", fee: "$30/hr" }
-      ],
-      selectedCaregiver: 101 as number | null
-    },
-    {
-      id: 4,
-      date: "Sun, 8:00 AM - 2:00 PM",
-      patient: "Uncle Razif",
-      status: "responses",
-      responses: [
-        { id: 101, name: "Natasha", experience: "5 yrs", rating: 4.9, avatar: "/malay_caregiver.webp", fee: "$25/hr" },
-        { id: 102, name: "Mei Ling", experience: "8 yrs", rating: 5.0, avatar: "/aunty.avif", fee: "$30/hr" }
-      ],
-      selectedCaregiver: null as number | null
-    }
-  ]);
+  // Shift requests are the user's own cover posts (from the community feed); the
+  // "responses" on each are real offers other caregivers made via "Offer Help".
+  type Caregiver = { id: string; name: string; avatar: string };
+  type ShiftRequest = { id: string; date: string; status: string; responses: Caregiver[]; selectedCaregiver: string | null };
+  type ShiftOffer = { id: string; postId: string; shiftLabel: string; posterName: string; caregiverName: string; caregiverAvatar: string; status: "pending" | "accepted" };
 
-  const handleSelectCaregiver = (requestId: number, caregiverId: number) => {
-    setShiftRequests(prev => prev.map(req => 
-      req.id === requestId ? { ...req, selectedCaregiver: caregiverId, status: "confirmed" } : req
-    ));
+  const [covers, setCovers] = useState<any[]>([]);
+  const [offers, setOffers] = useState<ShiftOffer[]>([]);
+
+  React.useEffect(() => {
+    const localCovers = load<any[]>(KEYS.shiftRequests, []);
+    const localOffers = load<ShiftOffer[]>(KEYS.shiftOffers, []);
+    if (localCovers.length) setCovers(localCovers);
+    if (localOffers.length) setOffers(localOffers);
+    hydrate().then(remote => {
+      const rc = (remote[KEYS.shiftRequests] as any[] | undefined) ?? [];
+      const ro = (remote[KEYS.shiftOffers] as ShiftOffer[] | undefined) ?? [];
+      if (rc.length) setCovers(rc);
+      if (ro.length) setOffers(ro);
+    });
+  }, []);
+
+  const myName = userProfile?.caregiverName ?? "You";
+
+  // My cover posts + the offers made on each.
+  const shiftRequests: ShiftRequest[] = React.useMemo(() =>
+    covers.filter(c => c?.type === "help").map(c => {
+      const postOffers = offers.filter(o => o.postId === String(c.id));
+      const accepted = postOffers.find(o => o.status === "accepted");
+      return {
+        id: String(c.id),
+        date: [c.helpDetails?.date, c.helpDetails?.time].filter(Boolean).join(", "),
+        status: accepted ? "confirmed" : (postOffers.length > 0 ? "responses" : "pending"),
+        responses: postOffers.map(o => ({ id: o.id, name: o.caregiverName, avatar: o.caregiverAvatar })),
+        selectedCaregiver: accepted ? accepted.id : null,
+      };
+    }), [covers, offers]);
+
+  // Offers *I* made that another caregiver accepted → notifications.
+  const acceptedForMe = React.useMemo(() =>
+    offers.filter(o => o.status === "accepted" && o.caregiverName === myName),
+    [offers, myName]);
+
+  const handleSelectCaregiver = (requestId: string, offerId: string) => {
+    const updated = offers.map(o =>
+      o.postId === requestId ? { ...o, status: (o.id === offerId ? "accepted" : o.status) as ShiftOffer["status"] } : o
+    );
+    setOffers(updated);
+    save(KEYS.shiftOffers, updated); // persists to Firestore so the accepted caregiver gets notified
   };
 
   const navItems = [
@@ -247,7 +267,7 @@ export default function HomeDashboard() {
               </div>
               <button onClick={() => { setIsProfileOpen(false); setIsShiftRequestsModalOpen(true); }} className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-white/8 transition-colors">
                 <span className="text-[11px] text-white/75">Shift Requests</span>
-                <span className="text-[9px] font-bold bg-yellow-400 text-black px-1.5 py-0.5 rounded">{shiftRequests.length}</span>
+                <span className="text-[9px] font-bold bg-yellow-400 text-black px-1.5 py-0.5 rounded">{shiftRequests.length + acceptedForMe.length}</span>
               </button>
               <button onClick={() => { setIsProfileOpen(false); setIsPatientInfoOpen(true); }} className="w-full text-left px-3 py-1.5 text-[11px] text-white/75 hover:bg-white/8 transition-colors">
                 Patient Information
@@ -286,12 +306,26 @@ export default function HomeDashboard() {
             <div className="relative w-full max-h-[85%] h-full sm:h-auto sm:max-w-md bg-[#111] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-300">
               
               <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                {/* Notifications — shifts where my offer to help was accepted */}
+                {acceptedForMe.map((o) => (
+                  <div key={o.id} className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-green-500/20 flex items-center justify-center shrink-0 text-green-400">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-green-400">You&apos;ve been accepted!</p>
+                        <p className="text-xs text-white/60 mt-0.5">{o.posterName} accepted your offer · {o.shiftLabel}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
                 {shiftRequests.map((request) => (
                   <div key={request.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <div className="p-4 border-b border-white/10 bg-white/[0.02]">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h3 className="font-semibold text-white text-sm">{request.patient}</h3>
+                          <h3 className="font-semibold text-white text-sm">{userProfile?.patientName ?? "Patient"}</h3>
                           <p className="text-xs text-white/60 mt-0.5">{request.date}</p>
                         </div>
                         {request.status === "confirmed" ? (
@@ -311,8 +345,8 @@ export default function HomeDashboard() {
                           const caregiver = request.responses.find(c => c.id === request.selectedCaregiver);
                           return caregiver && (
                             <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-xl overflow-hidden shrink-0">
-                                <img src={caregiver.avatar} alt={caregiver.name} className="h-full w-full object-cover" />
+                              <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold text-white/70 overflow-hidden shrink-0">
+                                {caregiver.avatar ? <img src={caregiver.avatar} alt={caregiver.name} className="h-full w-full object-cover" /> : caregiver.name.charAt(0).toUpperCase()}
                               </div>
                               <div>
                                 <p className="text-sm font-semibold text-white">{caregiver.name}</p>
@@ -328,8 +362,8 @@ export default function HomeDashboard() {
                           {request.responses.map(caregiver => (
                             <div key={caregiver.id} className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/5 hover:border-yellow-500/30 transition-colors">
                               <div className="flex items-center gap-3">
-                                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center text-lg overflow-hidden shrink-0">
-                                  <img src={caregiver.avatar} alt={caregiver.name} className="h-full w-full object-cover" />
+                                <div className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold text-white/70 overflow-hidden shrink-0">
+                                  {caregiver.avatar ? <img src={caregiver.avatar} alt={caregiver.name} className="h-full w-full object-cover" /> : caregiver.name.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
                                   <p className="text-sm font-medium text-white">{caregiver.name}</p>
