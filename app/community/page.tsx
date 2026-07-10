@@ -73,6 +73,66 @@ const mockPosts: PostProps[] = [
     caption: "Need someone to cover our morning shift this weekend. Very calm patient, just needs help with breakfast and light walking.",
     likes: 5,
     comments: []
+  },
+  {
+    id: "5",
+    user: {
+      name: "Tan Family",
+      avatar: "",
+      trustRating: "⭐ 4.8 (32 Shifts)"
+    },
+    time: "4 hours ago",
+    type: "help",
+    helpDetails: {
+      date: "Sun, Nov 15",
+      time: "06:00 PM - 10:00 PM",
+      location: "Petaling Jaya, Selangor",
+      patientAge: "68",
+      condition: "Type 2 Diabetes • Insulin schedule"
+    },
+    caption: "Family emergency came up and we need evening coverage tonight. Just needs dinner prep and a reminder for her insulin shot at 8pm.",
+    likes: 3,
+    comments: []
+  },
+  {
+    id: "6",
+    user: {
+      name: "Lim Family",
+      avatar: "",
+      trustRating: "⭐ 4.9 (58 Shifts)"
+    },
+    time: "9 hours ago",
+    type: "help",
+    helpDetails: {
+      date: "Mon, Nov 16",
+      time: "10:00 PM - 06:00 AM",
+      location: "Ipoh, Perak",
+      patientAge: "75",
+      condition: "Stroke recovery • Mobility Assist"
+    },
+    caption: "Looking for an overnight caregiver to cover for us this Monday — we have a wedding to attend out of town. Patient sleeps well but may need help getting to the bathroom.",
+    likes: 8,
+    comments: []
+  },
+  {
+    id: "7",
+    user: {
+      name: "Rajan Family",
+      avatar: "",
+      trustRating: "⭐ 5.0 (New)"
+    },
+    time: "1 day ago",
+    type: "help",
+    helpDetails: {
+      date: "Sat, Nov 21",
+      time: "01:00 PM - 05:00 PM",
+      location: "Klang, Selangor",
+      patientAge: "80",
+      condition: "Hypertension • General Care"
+    },
+    caption: "Need weekend afternoon cover so we can take our kids to a birthday party. Dad is easygoing, just needs company and his blood pressure checked once.",
+    likes: 1,
+    comments: []
   }
 ];
 
@@ -401,6 +461,17 @@ export default function CommunityPage() {
                   onLike={(newCount) => {
                     setPosts(prev => {
                       const updated = prev.map(p => p.id === post.id ? { ...p, likes: newCount } : p);
+                      const mockIds = new Set(mockPosts.map(p => p.id));
+                      const toSavePosts = updated.filter(p => !mockIds.has(p.id) && p.type !== "help");
+                      const toSaveShifts = updated.filter(p => !mockIds.has(p.id) && p.type === "help");
+                      save(KEYS.communityPosts, toSavePosts);
+                      save(KEYS.shiftRequests, toSaveShifts);
+                      return updated;
+                    });
+                  }}
+                  onComment={(comment) => {
+                    setPosts(prev => {
+                      const updated = prev.map(p => p.id === post.id ? { ...p, comments: [...p.comments, comment] } : p);
                       const mockIds = new Set(mockPosts.map(p => p.id));
                       const toSavePosts = updated.filter(p => !mockIds.has(p.id) && p.type !== "help");
                       const toSaveShifts = updated.filter(p => !mockIds.has(p.id) && p.type === "help");

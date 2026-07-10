@@ -40,7 +40,7 @@ export interface PostProps {
   comments: Comment[];
 }
 
-export default function PostCard({ post, onDelete, onLike }: { post: PostProps; onDelete?: () => void; onLike?: (newCount: number) => void }) {
+export default function PostCard({ post, onDelete, onLike, onComment }: { post: PostProps; onDelete?: () => void; onLike?: (newCount: number) => void; onComment?: (comment: Comment) => void }) {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
@@ -48,6 +48,7 @@ export default function PostCard({ post, onDelete, onLike }: { post: PostProps; 
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerSent, setOfferSent] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [commentText, setCommentText] = useState("");
 
   const initials = post.user.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
@@ -88,6 +89,13 @@ export default function PostCard({ post, onDelete, onLike }: { post: PostProps; 
     setIsLiked(nowLiked);
     setLikeCount(newCount);
     onLike?.(newCount);
+  };
+
+  const handlePostComment = () => {
+    const text = commentText.trim();
+    if (!text) return;
+    onComment?.({ id: `${post.id}-c-${Date.now()}`, user: currentCaregiverName(), text });
+    setCommentText("");
   };
 
   return (
@@ -252,12 +260,21 @@ export default function PostCard({ post, onDelete, onLike }: { post: PostProps; 
               <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 overflow-hidden border border-white/20">
                 <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="You" className="h-full w-full object-cover" />
               </div>
-              <input 
-                type="text" 
-                placeholder="Add a comment..." 
+              <input
+                type="text"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handlePostComment(); }}
+                placeholder="Add a comment..."
                 className="flex-1 bg-transparent text-sm text-white placeholder-white/40 outline-none"
               />
-              <button className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors">Post</button>
+              <button
+                onClick={handlePostComment}
+                disabled={!commentText.trim()}
+                className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-40 disabled:hover:text-blue-400"
+              >
+                Post
+              </button>
             </div>
           </div>
         )}

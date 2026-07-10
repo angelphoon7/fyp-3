@@ -22,6 +22,13 @@ type Medication = {
   schedules: Schedule[];
 };
 
+type Contact = {
+  id: string;
+  name: string;
+  chatId: string;
+  relation: string;
+};
+
 const INTAKE_LABELS   = ["1st Intake", "2nd Intake", "3rd Intake", "4th Intake", "5th Intake"];
 const INTAKE_ICONS    = ["🌅", "☀️", "🌆", "🌙", "⭐"];
 const INTAKE_DEFAULTS = ["08:00", "13:00", "18:00", "21:00", "23:00"];
@@ -60,12 +67,20 @@ export default function MedicationPage() {
     },
   ];
   const [medications, setMedications] = useState<Medication[]>(defaultMedications);
+  const [contacts, setContacts] = useState<Contact[]>([]);
 
   // --- add medication sheet ---
   const [addOpen, setAddOpen]   = useState(false);
   const [newName, setNewName]   = useState("");
   const [newDosage, setNewDosage] = useState("");
   const [activeTimes, setActiveTimes] = useState<string[]>(["08:00"]);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
+  const toggleContactSelect = (id: string) => {
+    setSelectedContactIds(prev =>
+      prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
+    );
+  };
 
   // time picker bottom sheet
   const HOURS   = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"));
@@ -112,11 +127,32 @@ export default function MedicationPage() {
     const schedules: Schedule[] = activeTimes.map((time, i) => ({
       id: uid(), period: INTAKE_LABELS[i], time, taken: false,
     }));
-    setMedications(prev => [...prev, { id: uid(), name: newName.trim(), dosage: newDosage.trim(), schedules }]);
+    const newMed = { id: uid(), name: newName.trim(), dosage: newDosage.trim(), schedules };
+    setMedications(prev => [...prev, newMed]);
     setNewName("");
     setNewDosage("");
     setActiveTimes(["08:00"]);
     setAddOpen(false);
+
+    // Notify selected contacts directly via the backend Telegram route
+    const chatIds = contacts.filter(c => selectedContactIds.includes(c.id)).map(c => c.chatId);
+    if (chatIds.length > 0) {
+      const timesStr = schedules.map(s => `${s.period}: ${fmt12h(s.time)}`).join("\n");
+      const message = [
+        "💊 A new medication has been added:",
+        "",
+        `🧪 ${newMed.name}${newMed.dosage ? ` (${newMed.dosage})` : ""}`,
+        `⏰ ${timesStr}`,
+        "",
+        "— KAI Caregiving App",
+      ].join("\n");
+      fetch("/api/send-telegram-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatIds, message }),
+      }).catch(() => {});
+    }
+    setSelectedContactIds([]);
   };
 
   // --- mark taken ---
@@ -145,8 +181,11 @@ export default function MedicationPage() {
     resetDailyData();
     const local = load(KEYS.medications, []);
     if (local.length) setMedications(local);
+    const localContacts = load<Contact[]>(KEYS.contacts, []);
+    if (localContacts.length) setContacts(localContacts);
     hydrate().then((data) => {
       if (data[KEYS.medications]?.length) setMedications(data[KEYS.medications]);
+      if (data[KEYS.contacts]?.length) setContacts(data[KEYS.contacts]);
       setHydrated(true);
     });
   }, []);
@@ -264,12 +303,63 @@ export default function MedicationPage() {
                 </div>
               </div>
 
+              {/* Notify section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] text-white/40 font-bold uppercase tracking-wider">Notify via Telegram</label>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setAddOpen(false); router.push('/appointment'); }}
+                    className="text-[11px] text-yellow-400 font-bold"
+                  >
+                    + Manage contacts
+                  </button>
+                </div>
+
+                {contacts.length === 0 ? (
+                  <div className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-[12px] text-white/30 text-center">
+                    No contacts yet — tap "Manage contacts" to add family members
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {contacts.map(c => {
+                      const selected = selectedContactIds.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => toggleContactSelect(c.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors ${
+                            selected
+                              ? "bg-yellow-400/10 border-yellow-400/40"
+                              : "bg-white/5 border-white/10"
+                          }`}
+                        >
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold transition-colors ${
+                            selected ? "bg-yellow-400 text-black" : "bg-white/10 text-white/50"
+                          }`}>
+                            {selected ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            ) : (
+                              c.name.charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className={`text-sm font-semibold ${selected ? "text-yellow-100" : "text-white/70"}`}>{c.name}</p>
+                            <p className="text-[11px] text-white/30">{c.relation} · Telegram {c.chatId}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={addMedication}
                 disabled={!newName.trim() || activeTimes.length === 0}
                 className="w-full py-3.5 rounded-xl bg-yellow-400 text-black font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
               >
                 Add Medication
+                {selectedContactIds.length > 0 && ` · Notify ${selectedContactIds.length}`}
               </button>
             </div>
           </div>

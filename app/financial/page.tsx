@@ -63,7 +63,7 @@ function buildTransactions(householdTasks: HouseTask[], appointments: Appointmen
     txns.push({
       id: `medical-${idx}`,
       title: r.hospital || a.hospital,
-      date: a.date || a.doc?.scannedAt || "",
+      date: a.doc?.scannedAt || a.date || "",
       amount: r.total,
       currency: r.currency || "MYR",
       category: "medical",

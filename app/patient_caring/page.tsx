@@ -346,11 +346,6 @@ export default function PatientCaringPage() {
                   ))}
                 </div>
 
-                <button className="w-full mt-6 py-4 rounded-xl border border-dashed border-white/30 text-white/70 text-sm font-bold hover:bg-white/10 hover:text-white transition-colors flex items-center justify-center gap-2 backdrop-blur-sm">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Add Custom Task
-                </button>
-
               </div>
             </div>
           </ReflectiveCard>

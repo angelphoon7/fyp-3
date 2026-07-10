@@ -187,6 +187,21 @@ export default function ReportPage() {
         doc.text(value, margin + 55, y);
         nl();
       };
+      const GREEN: [number, number, number] = [16, 185, 129];
+      const GRAY:  [number, number, number] = [155, 155, 155];
+      // small filled/outline dot used instead of unicode ✓/○ glyphs, which the
+      // built-in helvetica font can't encode (they render as garbled bytes)
+      const statusLine = (label: string, done: boolean, statusText: string, indent = 0) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        const dotX = margin + 3 + indent, dotY = y - 1.3, r = 1;
+        if (done) { doc.setFillColor(...GREEN); doc.circle(dotX, dotY, r, "F"); }
+        else { doc.setDrawColor(...GRAY).setLineWidth(0.3); doc.circle(dotX, dotY, r, "S"); }
+        doc.setFontSize(8.5).setTextColor(90, 90, 90).setFont("helvetica", "normal");
+        doc.text(label, margin + 7 + indent, y);
+        doc.setFontSize(8).setFont("helvetica", done ? "bold" : "normal").setTextColor(...(done ? GREEN : GRAY));
+        doc.text(statusText, margin + colW - doc.getTextWidth(statusText), y);
+        nl();
+      };
       const body = (text: string) => {
         if (y > 270) { doc.addPage(); y = 20; }
         const lines = doc.splitTextToSize(text, colW) as string[];
@@ -213,7 +228,10 @@ export default function ReportPage() {
       if (careTasks.length > 0) {
         section("Patient Care");
         row("Completed", `${careCompleted} / ${careTotal} tasks`);
-        careTasks.forEach(t => row(`  ${t.name}`, t.logs.length > 0 ? `✓ ${t.logs.length} check-in(s)` : "Not logged"));
+        careTasks.forEach(t => {
+          const done = t.logs.length > 0;
+          statusLine(t.name, done, done ? `${t.logs.length} check-in${t.logs.length !== 1 ? "s" : ""}` : "Not logged");
+        });
         nl(2);
       }
 
@@ -223,12 +241,10 @@ export default function ReportPage() {
         row("Adherence", `${medPct}% (${medTaken}/${medTotal} doses)`);
         medications.forEach(m => {
           const taken = m.schedules.filter(s => s.taken).length;
-          row(`  ${m.name} ${m.dosage}`, `${taken}/${m.schedules.length} taken`);
+          const allTaken = taken === m.schedules.length;
+          row(`  ${m.name} ${m.dosage}`, `${taken}/${m.schedules.length} taken`, allTaken ? GREEN : undefined);
           m.schedules.forEach(s => {
-            doc.setFontSize(8).setTextColor(120, 120, 120).setFont("helvetica", "normal");
-            const info = s.taken ? `✓ Taken at ${s.takenAt}` : `○ ${s.time} — not yet taken`;
-            doc.text(`       ${s.period}: ${info}`, margin, y);
-            nl();
+            statusLine(`${s.period} · ${s.time}`, s.taken, s.taken ? `Taken at ${s.takenAt}` : "Not yet taken", 4);
           });
         });
         nl(2);
@@ -251,7 +267,10 @@ export default function ReportPage() {
       if (householdTasks.length > 0) {
         section("Household Tasks");
         row("Completed", `${houseCompleted} / ${houseTotal} tasks`);
-        householdTasks.forEach(t => row(`  ${t.name}`, t.logs.length > 0 ? `✓ Done` : "Not done"));
+        householdTasks.forEach(t => {
+          const done = t.logs.length > 0;
+          statusLine(t.name, done, done ? "Done" : "Not done");
+        });
         nl(2);
       }
 
